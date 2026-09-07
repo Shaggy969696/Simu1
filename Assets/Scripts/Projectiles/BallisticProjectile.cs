@@ -5,6 +5,7 @@ namespace Simu1.Projectiles
     /// <summary>
     /// Proyectil que utiliza el motor físico de Unity (Rigidbody) para su desplazamiento balístico.
     /// Emplea ContinuousDynamic e Interpolate para colisiones confiables y movimiento fluido.
+    /// Totalmente desacoplado e independiente de la jerarquía del cañón.
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
     public class BallisticProjectile : ProjectileBase
@@ -13,21 +14,18 @@ namespace Simu1.Projectiles
 
         private void Awake()
         {
-            InitializeRigidbody();
+            rb = GetComponent<Rigidbody>();
+            ConfigureRigidbody();
         }
 
         private void Reset()
         {
-            InitializeRigidbody();
+            rb = GetComponent<Rigidbody>();
+            ConfigureRigidbody();
         }
 
-        private void InitializeRigidbody()
+        private void ConfigureRigidbody()
         {
-            if (rb == null)
-            {
-                rb = GetComponent<Rigidbody>();
-            }
-
             if (rb != null)
             {
                 rb.useGravity = true;
@@ -40,11 +38,6 @@ namespace Simu1.Projectiles
         {
             base.ResetState();
 
-            if (rb == null)
-            {
-                rb = GetComponent<Rigidbody>();
-            }
-
             if (rb != null)
             {
                 rb.linearVelocity = Vector3.zero;
@@ -54,20 +47,18 @@ namespace Simu1.Projectiles
 
         protected override void ApplyLaunchPhysics(Vector3 direction, float force, float mass)
         {
-            if (rb == null)
+            if (rb != null)
             {
-                rb = GetComponent<Rigidbody>();
+                // Asignar masa solicitada por el usuario
+                rb.mass = Mathf.Max(0.001f, mass);
+
+                // Asegurar que no arrastre inercia previa
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+
+                // Aplicar el impulso inicial según la dirección y fuerza
+                rb.AddForce(direction.normalized * force, ForceMode.Impulse);
             }
-
-            // Asignar masa solicitada por el usuario
-            rb.mass = Mathf.Max(0.001f, mass);
-
-            // Asegurar que no arrastre inercia previa
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-
-            // Aplicar el impulso inicial según la dirección y fuerza
-            rb.AddForce(direction.normalized * force, ForceMode.Impulse);
         }
 
         protected override void OnPostImpact(Collision collision, ProjectileImpactData data)

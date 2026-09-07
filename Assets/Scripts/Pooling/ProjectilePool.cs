@@ -57,7 +57,9 @@ namespace Simu1.Pooling
 
             if (poolContainer == null)
             {
-                poolContainer = this.transform;
+                // Crear un contenedor independiente en la raíz de la escena para evitar emparentar con el cañón
+                GameObject containerGO = new GameObject("[Pool_Proyectiles]");
+                poolContainer = containerGO.transform;
             }
 
             pool = new ObjectPool<BallisticProjectile>(
@@ -84,13 +86,22 @@ namespace Simu1.Pooling
 
         private void OnTakeFromPool(BallisticProjectile projectile)
         {
+            // Desvincular de la jerarquía al salir al mundo y asegurar escala esférica original
+            projectile.transform.SetParent(null);
+            projectile.transform.localScale = Vector3.one;
             projectile.gameObject.SetActive(true);
         }
 
         private void OnReturnedToPool(BallisticProjectile projectile)
         {
             projectile.ResetState();
+            projectile.transform.localScale = Vector3.one;
             projectile.gameObject.SetActive(false);
+
+            if (poolContainer != null)
+            {
+                projectile.transform.SetParent(poolContainer, false);
+            }
         }
 
         private void OnDestroyPoolObject(BallisticProjectile projectile)

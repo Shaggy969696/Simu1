@@ -53,6 +53,10 @@ namespace Simu1.Projectiles
         /// </summary>
         public virtual void Launch(Vector3 direction, float force, float mass)
         {
+            // Desvincular de cualquier jerarquía y asegurar escala uniforme nativa en el mundo
+            transform.SetParent(null);
+            transform.localScale = Vector3.one;
+
             ResetState();
             launchPosition = transform.position;
             maxHeight = launchPosition.y;
@@ -82,6 +86,7 @@ namespace Simu1.Projectiles
             hasImpacted = false;
             maxHeight = 0f;
             launchPosition = Vector3.zero;
+            transform.localScale = Vector3.one;
         }
 
         protected virtual void OnCollisionEnter(Collision collision)
