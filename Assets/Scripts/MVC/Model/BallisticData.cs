@@ -26,11 +26,17 @@ namespace Simu1.Model
         private float gravity;
         private float lastHorizontalDistance;
         private float lastMaxHeight;
+        private float lastFlightTime;
+        private float lastRelativeVelocity;
+        private float lastCollisionImpulse;
+        private int lastFallenPieces;
+        private int lastScore;
         private bool hasImpactData;
 
         // Eventos desacoplados para observadores externos del modelo
         public event Action OnDataChanged;
         public event Action<float, float> OnImpactRecorded;
+        public event Action OnShotReportUpdated;
 
         // Propiedades encapsuladas con validación estricta
         public float LaunchAngle
@@ -105,6 +111,11 @@ namespace Simu1.Model
 
         public float LastHorizontalDistance => lastHorizontalDistance;
         public float LastMaxHeight => lastMaxHeight;
+        public float LastFlightTime => lastFlightTime;
+        public float LastRelativeVelocity => lastRelativeVelocity;
+        public float LastCollisionImpulse => lastCollisionImpulse;
+        public int LastFallenPieces => lastFallenPieces;
+        public int LastScore => lastScore;
         public bool HasImpactData => hasImpactData;
 
         /// <summary>
@@ -119,6 +130,11 @@ namespace Simu1.Model
             gravity = Math.Max(0.001f, initialGravity);
             lastHorizontalDistance = 0f;
             lastMaxHeight = 0f;
+            lastFlightTime = 0f;
+            lastRelativeVelocity = 0f;
+            lastCollisionImpulse = 0f;
+            lastFallenPieces = 0;
+            lastScore = 0;
             hasImpactData = false;
         }
 
@@ -178,26 +194,55 @@ namespace Simu1.Model
         }
 
         /// <summary>
-        /// Actualiza los resultados registrados del último impacto del proyectil.
+        /// Calcula la puntuación del disparo combinando piezas derribadas e impulso transferido.
         /// </summary>
-        public void SetImpactResults(float horizontalDistance, float maxHeight)
+        public int CalculateScore(int fallenPieces, float impulse)
+        {
+            int pieceScore = Math.Max(0, fallenPieces) * 100;
+            int impulseScore = (int)Math.Round(Math.Max(0f, impulse) * 2f);
+            return pieceScore + impulseScore;
+        }
+
+        /// <summary>
+        /// Actualiza los resultados registrados del último impacto del proyectil con datos físicos completos.
+        /// </summary>
+        public void SetImpactResults(
+            float horizontalDistance, 
+            float maxHeight, 
+            float flightTime = 0f, 
+            float relativeVelocity = 0f, 
+            float collisionImpulse = 0f, 
+            int fallenPieces = 0)
         {
             lastHorizontalDistance = Math.Max(0f, horizontalDistance);
             lastMaxHeight = maxHeight;
+            lastFlightTime = Math.Max(0f, flightTime);
+            lastRelativeVelocity = Math.Max(0f, relativeVelocity);
+            lastCollisionImpulse = Math.Max(0f, collisionImpulse);
+            lastFallenPieces = Math.Max(0, fallenPieces);
+            lastScore = CalculateScore(lastFallenPieces, lastCollisionImpulse);
             hasImpactData = true;
 
             OnImpactRecorded?.Invoke(lastHorizontalDistance, lastMaxHeight);
+            OnShotReportUpdated?.Invoke();
             OnDataChanged?.Invoke();
         }
 
         /// <summary>
-        /// Restablece el registro del último impacto.
+        /// Restablece el registro del último impacto y las métricas asociadas.
         /// </summary>
         public void ResetImpact()
         {
             lastHorizontalDistance = 0f;
             lastMaxHeight = 0f;
+            lastFlightTime = 0f;
+            lastRelativeVelocity = 0f;
+            lastCollisionImpulse = 0f;
+            lastFallenPieces = 0;
+            lastScore = 0;
             hasImpactData = false;
+
+            OnShotReportUpdated?.Invoke();
             OnDataChanged?.Invoke();
         }
 

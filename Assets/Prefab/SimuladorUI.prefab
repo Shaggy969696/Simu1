@@ -2137,7 +2137,6 @@ GameObject:
   - component: {fileID: 4931863762877257747}
   - component: {fileID: 1484346497365150987}
   - component: {fileID: 3191574751385485001}
-  - component: {fileID: 9044244581446526441}
   m_Layer: 0
   m_Name: SimuladorUI
   m_TagString: Untagged
@@ -2228,22 +2227,3 @@ MonoBehaviour:
   m_BlockingMask:
     serializedVersion: 2
     m_Bits: 4294967295
---- !u!114 &9044244581446526441
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9089034121569903368}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e8b15fa276e04d498b31a31d87e0000f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Simu1.UI.CannonUIController
-  arma: {fileID: 0}
-  angleSlider: {fileID: 3813339759648415826}
-  angleValueText: {fileID: 138473200924228541}
-  forceInputField: {fileID: 8717098331398817705}
-  massInputField: {fileID: 7887490231663414981}
-  distanceResultText: {fileID: 7136448452375614011}
-  heightResultText: {fileID: 5079698727335634730}

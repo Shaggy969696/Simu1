@@ -11,10 +11,16 @@ namespace Simu1.Projectiles
     public abstract class ProjectileBase : MonoBehaviour, ILaunchable
     {
         [Header("Configuración de Impacto")]
-        [Tooltip("Tag del suelo u objeto objetivo para registrar el impacto.")]
+        [Tooltip("Tag principal de impacto (ej. Ground).")]
         [SerializeField] private string targetTag = "Ground";
 
-        [Tooltip("Tiempo en segundos antes de desactivar el proyectil tras el impacto con el suelo.")]
+        [Tooltip("Tags adicionales válidos para registrar el impacto (ej. Target, Structure).")]
+        [SerializeField] private string[] additionalTargetTags = new string[] { "Target", "Structure" };
+
+        [Tooltip("Si es true, cualquier colisionador sólido no proyectil registrará el primer impacto.")]
+        [SerializeField] private bool impactOnAnySolid = true;
+
+        [Tooltip("Tiempo en segundos antes de desactivar el proyectil tras el impacto.")]
         [SerializeField] private float autoDeactivateDelay = 3.0f;
 
         // Eventos desacoplados para observadores externos (DIP)
@@ -24,12 +30,14 @@ namespace Simu1.Projectiles
         // Estado interno protegido (Encapsulación)
         protected Vector3 launchPosition;
         protected float maxHeight;
+        protected float launchTime;
         protected bool isLaunched;
         protected bool hasImpacted;
 
         // Propiedades públicas de solo lectura
         public Vector3 LaunchPosition => launchPosition;
         public float MaxHeight => maxHeight;
+        public float LaunchTime => launchTime;
         public bool IsLaunched => isLaunched;
         public bool HasImpacted => hasImpacted;
         public string TargetTag => targetTag;
@@ -59,6 +67,7 @@ namespace Simu1.Projectiles
 
             ResetState();
             launchPosition = transform.position;
+            launchTime = Time.time;
             maxHeight = launchPosition.y;
             isLaunched = true;
             hasImpacted = false;
@@ -85,19 +94,49 @@ namespace Simu1.Projectiles
             isLaunched = false;
             hasImpacted = false;
             maxHeight = 0f;
+            launchTime = 0f;
             launchPosition = Vector3.zero;
             transform.localScale = Vector3.one;
+        }
+
+        /// <summary>
+        /// Determina si un objeto con el que se colisiona debe disparar el registro de impacto.
+        /// </summary>
+        protected virtual bool IsValidCollisionTarget(GameObject obj)
+        {
+            if (obj == null || obj == gameObject) return false;
+            // Evitar registrar impacto accidental contra otros proyectiles
+            if (obj.TryGetComponent<ProjectileBase>(out _)) return false;
+
+            if (impactOnAnySolid) return true;
+
+            if (!string.IsNullOrEmpty(targetTag) && obj.CompareTag(targetTag)) return true;
+
+            if (additionalTargetTags != null)
+            {
+                for (int i = 0; i < additionalTargetTags.Length; i++)
+                {
+                    if (!string.IsNullOrEmpty(additionalTargetTags[i]) && obj.CompareTag(additionalTargetTags[i]))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         protected virtual void OnCollisionEnter(Collision collision)
         {
             if (!isLaunched || hasImpacted) return;
 
-            if (collision.gameObject.CompareTag(targetTag))
+            if (IsValidCollisionTarget(collision.gameObject))
             {
                 hasImpacted = true;
 
-                // Punto de contacto con el suelo
+                float flightTime = Mathf.Max(0f, Time.time - launchTime);
+
+                // Punto de contacto con el objeto colisionado
                 Vector3 contactPoint = collision.contactCount > 0 
                     ? collision.GetContact(0).point 
                     : transform.position;
@@ -113,12 +152,18 @@ namespace Simu1.Projectiles
                     maxHeight = transform.position.y;
                 }
 
+                Vector3 relativeVel = collision.relativeVelocity;
+                Vector3 impulse = collision.impulse;
+
                 ProjectileImpactData impactData = new ProjectileImpactData(
                     launchPosition,
                     contactPoint,
                     horizontalDistance,
                     maxHeight,
-                    collision.gameObject
+                    collision.gameObject,
+                    flightTime,
+                    relativeVel,
+                    impulse
                 );
 
                 // Notificar impacto

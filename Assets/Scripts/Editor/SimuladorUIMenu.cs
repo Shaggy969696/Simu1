@@ -1,8 +1,7 @@
 using System.IO;
 using Simu1.Controller;
-using Simu1.UI;
+using Simu1.Pooling;
 using Simu1.View;
-using Simu1.Weapons;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -14,7 +13,7 @@ namespace Simu1.Editor
     /// Utilidad de Editor para generar automáticamente la interfaz del Simulador Balístico en la escena.
     /// Crea el Canvas, EventSystem con acciones por defecto para Input System,
     /// Panel en la esquina inferior izquierda, Slider con gráficos y LayoutElements visibles,
-    /// InputFields de Fuerza y Masa, textos de métricas de impacto, y los conecta con CannonUIController.
+    /// InputFields de Fuerza y Masa, textos de métricas de impacto, y los conecta con la arquitectura MVC (BallisticController y BallisticView).
     /// </summary>
     public static class SimuladorUIMenu
     {
@@ -216,47 +215,42 @@ namespace Simu1.Editor
             // Indicación para disparar
             CreateLabel(panelGO.transform, "Pulsa [ESPACIO] para disparar", 11, FontStyle.Italic, new Color(0.7f, 0.7f, 0.7f), TextAnchor.MiddleCenter);
 
-            // 5. Agregar y configurar componentes MVC (BallisticView, BallisticController y CannonUIController)
-            Arma foundArma = Object.FindFirstObjectByType<Arma>();
+            // 5. Configurar componentes MVC (BallisticView y BallisticController)
+            GameObject cannonGO = GameObject.Find("Cannon");
+            GameObject targetGO = cannonGO != null ? cannonGO : canvasGO;
 
-            BallisticView ballisticView = canvasGO.AddComponent<BallisticView>();
+            BallisticView ballisticView = targetGO.GetComponent<BallisticView>() ?? targetGO.AddComponent<BallisticView>();
             SerializedObject soView = new SerializedObject(ballisticView);
             soView.FindProperty("angleTextLegacy").objectReferenceValue = angleValueText;
             soView.FindProperty("distanceResultTextLegacy").objectReferenceValue = distText;
             soView.FindProperty("heightResultTextLegacy").objectReferenceValue = heightText;
-            if (foundArma != null)
+            if (cannonGO != null)
             {
-                soView.FindProperty("barrelTransform").objectReferenceValue = foundArma.transform;
+                soView.FindProperty("barrelTransform").objectReferenceValue = cannonGO.transform;
             }
             soView.ApplyModifiedProperties();
 
-            BallisticController ballisticController = canvasGO.AddComponent<BallisticController>();
+            BallisticController ballisticController = targetGO.GetComponent<BallisticController>() ?? targetGO.AddComponent<BallisticController>();
             SerializedObject soCtrl = new SerializedObject(ballisticController);
             soCtrl.FindProperty("view").objectReferenceValue = ballisticView;
             soCtrl.FindProperty("angleSlider").objectReferenceValue = slider;
             soCtrl.FindProperty("forceInputField").objectReferenceValue = forceInput;
             soCtrl.FindProperty("massInputField").objectReferenceValue = massInput;
-            if (foundArma != null)
+            if (cannonGO != null)
             {
-                soCtrl.FindProperty("barrelTransform").objectReferenceValue = foundArma.transform;
+                soCtrl.FindProperty("barrelTransform").objectReferenceValue = cannonGO.transform;
+                Transform spawn = cannonGO.transform.Find("spawnPoint");
+                if (spawn != null)
+                {
+                    soCtrl.FindProperty("spawnPoint").objectReferenceValue = spawn;
+                }
+                ProjectilePool pool = cannonGO.GetComponentInChildren<ProjectilePool>();
+                if (pool != null)
+                {
+                    soCtrl.FindProperty("projectilePool").objectReferenceValue = pool;
+                }
             }
             soCtrl.ApplyModifiedProperties();
-
-            CannonUIController uiController = canvasGO.AddComponent<CannonUIController>();
-            SerializedObject so = new SerializedObject(uiController);
-            if (foundArma != null)
-            {
-                so.FindProperty("arma").objectReferenceValue = foundArma;
-            }
-            so.FindProperty("controller").objectReferenceValue = ballisticController;
-            so.FindProperty("view").objectReferenceValue = ballisticView;
-            so.FindProperty("angleSlider").objectReferenceValue = slider;
-            so.FindProperty("angleValueText").objectReferenceValue = angleValueText;
-            so.FindProperty("forceInputField").objectReferenceValue = forceInput;
-            so.FindProperty("massInputField").objectReferenceValue = massInput;
-            so.FindProperty("distanceResultText").objectReferenceValue = distText;
-            so.FindProperty("heightResultText").objectReferenceValue = heightText;
-            so.ApplyModifiedProperties();
 
             // 6. Guardar como Prefab reutilizable
             string prefabDir = "Assets/Prefab";

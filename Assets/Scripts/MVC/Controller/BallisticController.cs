@@ -3,6 +3,7 @@ using Simu1.Interfaces;
 using Simu1.Model;
 using Simu1.Pooling;
 using Simu1.Projectiles;
+using Simu1.Targets;
 using Simu1.View;
 using TMPro;
 using UnityEngine;
@@ -55,6 +56,9 @@ namespace Simu1.Controller
 
         [Tooltip("Transform del cañón.")]
         [SerializeField] private Transform barrelTransform;
+
+        [Tooltip("Administrador de la estructura de objetivos físicos.")]
+        [SerializeField] private TargetStructureManager targetStructureManager;
 
         [Header("Configuración Inicial del Modelo")]
         [Range(0f, 90f)]
@@ -115,7 +119,15 @@ namespace Simu1.Controller
             {
                 projectilePool = GetComponent<ProjectilePool>() ?? FindFirstObjectByType<ProjectilePool>();
             }
+
+            if (targetStructureManager == null)
+            {
+                targetStructureManager = FindFirstObjectByType<TargetStructureManager>();
+            }
         }
+
+        public TargetStructureManager StructureManager => targetStructureManager;
+        public void SetTargetStructureManager(TargetStructureManager manager) => targetStructureManager = manager;
 
         private void InitializeViewAndInputs()
         {
@@ -348,7 +360,13 @@ namespace Simu1.Controller
         {
             if (model != null)
             {
-                model.SetImpactResults(impactData.HorizontalDistance, impactData.MaxHeight);
+                model.SetImpactResults(
+                    impactData.HorizontalDistance, 
+                    impactData.MaxHeight,
+                    impactData.FlightTime,
+                    impactData.RelativeSpeed,
+                    impactData.ImpulseMagnitude
+                );
             }
 
             if (view != null)
