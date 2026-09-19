@@ -1,5 +1,7 @@
 using System.IO;
+using Simu1.Controller;
 using Simu1.UI;
+using Simu1.View;
 using Simu1.Weapons;
 using UnityEditor;
 using UnityEngine;
@@ -214,15 +216,40 @@ namespace Simu1.Editor
             // Indicación para disparar
             CreateLabel(panelGO.transform, "Pulsa [ESPACIO] para disparar", 11, FontStyle.Italic, new Color(0.7f, 0.7f, 0.7f), TextAnchor.MiddleCenter);
 
-            // 5. Agregar y configurar CannonUIController
-            CannonUIController uiController = canvasGO.AddComponent<CannonUIController>();
-
-            SerializedObject so = new SerializedObject(uiController);
+            // 5. Agregar y configurar componentes MVC (BallisticView, BallisticController y CannonUIController)
             Arma foundArma = Object.FindFirstObjectByType<Arma>();
+
+            BallisticView ballisticView = canvasGO.AddComponent<BallisticView>();
+            SerializedObject soView = new SerializedObject(ballisticView);
+            soView.FindProperty("angleTextLegacy").objectReferenceValue = angleValueText;
+            soView.FindProperty("distanceResultTextLegacy").objectReferenceValue = distText;
+            soView.FindProperty("heightResultTextLegacy").objectReferenceValue = heightText;
+            if (foundArma != null)
+            {
+                soView.FindProperty("barrelTransform").objectReferenceValue = foundArma.transform;
+            }
+            soView.ApplyModifiedProperties();
+
+            BallisticController ballisticController = canvasGO.AddComponent<BallisticController>();
+            SerializedObject soCtrl = new SerializedObject(ballisticController);
+            soCtrl.FindProperty("view").objectReferenceValue = ballisticView;
+            soCtrl.FindProperty("angleSlider").objectReferenceValue = slider;
+            soCtrl.FindProperty("forceInputField").objectReferenceValue = forceInput;
+            soCtrl.FindProperty("massInputField").objectReferenceValue = massInput;
+            if (foundArma != null)
+            {
+                soCtrl.FindProperty("barrelTransform").objectReferenceValue = foundArma.transform;
+            }
+            soCtrl.ApplyModifiedProperties();
+
+            CannonUIController uiController = canvasGO.AddComponent<CannonUIController>();
+            SerializedObject so = new SerializedObject(uiController);
             if (foundArma != null)
             {
                 so.FindProperty("arma").objectReferenceValue = foundArma;
             }
+            so.FindProperty("controller").objectReferenceValue = ballisticController;
+            so.FindProperty("view").objectReferenceValue = ballisticView;
             so.FindProperty("angleSlider").objectReferenceValue = slider;
             so.FindProperty("angleValueText").objectReferenceValue = angleValueText;
             so.FindProperty("forceInputField").objectReferenceValue = forceInput;

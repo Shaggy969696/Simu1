@@ -1,5 +1,6 @@
 using System;
 using Simu1.Interfaces;
+using Simu1.Model;
 using Simu1.Pooling;
 using Simu1.Projectiles;
 using UnityEngine;
@@ -9,7 +10,7 @@ namespace Simu1.Weapons
     /// <summary>
     /// Componente principal del Cañón / Arma balística.
     /// Controla el ángulo de elevación (eje Z), fuerza en Newtons y masa del proyectil en kg.
-    /// Aplica el Teorema de Trabajo - Energía Cinética para dotar de coherencia física al impulso de salida.
+    /// Delega los datos y las reglas físicas de cálculo a BallisticData (Capa Model en MVC).
     /// Cumple con SRP, OCP y DIP (implementa IArma y se comunica mediante eventos).
     /// </summary>
     public class Arma : MonoBehaviour, IArma
@@ -41,43 +42,86 @@ namespace Simu1.Weapons
         [Tooltip("Longitud del tubo del cañón en metros a lo largo de la cual actúa la fuerza.")]
         [SerializeField] private float barrelLength = 2.0f;
 
+        // Instancia del Modelo (Capa Model en MVC)
+        private BallisticData model;
+
         // Evento desacoplado para notificar métricas de impacto a la UI (DIP)
         public event Action<ProjectileImpactData> OnLastShotImpact;
 
-        // Propiedades de la interfaz IArma (Encapsulación)
+        public BallisticData Model => model ?? EnsureModelInitialized();
+
+        // Propiedades de la interfaz IArma delegadas en el Modelo
         public float LaunchAngle
         {
-            get => launchAngle;
-            set => SetAngle(value);
+            get => Model.LaunchAngle;
+            set
+            {
+                Model.LaunchAngle = value;
+                launchAngle = Model.LaunchAngle;
+                ApplyRotation();
+            }
         }
 
         public float LaunchForce
         {
-            get => force;
-            set => force = Mathf.Max(0f, value);
+            get => Model.Force;
+            set
+            {
+                Model.Force = value;
+                force = Model.Force;
+            }
         }
 
         public float ProjectileMass
         {
-            get => projectileMass;
-            set => projectileMass = Mathf.Max(0.001f, value);
+            get => Model.ProjectileMass;
+            set
+            {
+                Model.ProjectileMass = value;
+                projectileMass = Model.ProjectileMass;
+            }
         }
 
         public float BarrelLength
         {
-            get => barrelLength;
-            set => barrelLength = Mathf.Max(0.1f, value);
+            get => Model.BarrelLength;
+            set
+            {
+                Model.BarrelLength = value;
+                barrelLength = Model.BarrelLength;
+            }
         }
 
         private void Awake()
         {
+            EnsureModelInitialized();
             InitializeReferences();
             ApplyRotation();
         }
 
+        private BallisticData EnsureModelInitialized()
+        {
+            if (model == null)
+            {
+                model = new BallisticData(
+                    initialAngle: launchAngle,
+                    initialForce: force,
+                    initialMass: projectileMass,
+                    initialBarrelLength: barrelLength
+                );
+            }
+            return model;
+        }
+
         private void OnValidate()
         {
-            // Permite actualizar visualmente el ángulo en la vista de escena desde el Inspector
+            if (model != null)
+            {
+                model.LaunchAngle = launchAngle;
+                model.Force = force;
+                model.ProjectileMass = projectileMass;
+                model.BarrelLength = barrelLength;
+            }
             ApplyRotation();
         }
 
@@ -147,7 +191,7 @@ namespace Simu1.Weapons
             Transform target = barrelTransform != null ? barrelTransform : transform;
             if (target != null)
             {
-                float zAngle = -(90f - launchAngle);
+                float zAngle = -(90f - LaunchAngle);
                 target.localRotation = Quaternion.Euler(0f, 0f, zAngle);
             }
         }
@@ -157,22 +201,15 @@ namespace Simu1.Weapons
         /// </summary>
         public void SetAngle(float angleInDegrees)
         {
-            launchAngle = Mathf.Clamp(angleInDegrees, 0f, 90f);
-            ApplyRotation();
+            LaunchAngle = angleInDegrees;
         }
 
         /// <summary>
-        /// Calcula el impulso inicial (N*s) aplicando el Teorema de Trabajo - Energía Cinética:
-        /// W = F * L = 0.5 * m * v0^2  ==>  v0 = sqrt(2 * F * L / m)
-        /// Impulso J = m * v0 = sqrt(2 * m * F * L)
+        /// Delega el cálculo del impulso inicial al Modelo (BallisticData).
         /// </summary>
         public float CalculateInitialImpulse()
         {
-            float safeMass = Mathf.Max(0.001f, projectileMass);
-            float safeForce = Mathf.Max(0f, force);
-            float safeBarrel = Mathf.Max(0.1f, barrelLength);
-
-            return Mathf.Sqrt(2f * safeMass * safeForce * safeBarrel);
+            return Model.CalculateInitialImpulse();
         }
 
         /// <summary>
@@ -185,6 +222,7 @@ namespace Simu1.Weapons
             Quaternion fireRotation = spawnPoint != null ? spawnPoint.rotation : transform.rotation;
 
             float impulse = CalculateInitialImpulse();
+            float mass = Model.ProjectileMass;
 
             // Prioridad 1: Obtener instancia desde el Object Pool
             if (projectilePool != null)
@@ -196,20 +234,21 @@ namespace Simu1.Weapons
                     pooledProjectile.transform.SetPositionAndRotation(firePosition, fireRotation);
                     pooledProjectile.transform.localScale = Vector3.one;
                     
-                    // Escuchar el impacto para notificar a la UI
+                    // Escuchar el impacto para notificar a la UI y actualizar el Modelo
                     void HandleImpact(ProjectileImpactData impactData)
                     {
                         pooledProjectile.OnImpactDetected -= HandleImpact;
+                        Model.SetImpactResults(impactData.HorizontalDistance, impactData.MaxHeight);
                         OnLastShotImpact?.Invoke(impactData);
                     }
                     pooledProjectile.OnImpactDetected += HandleImpact;
 
-                    pooledProjectile.Launch(fireDirection, impulse, projectileMass);
+                    pooledProjectile.Launch(fireDirection, impulse, mass);
                     return;
                 }
             }
 
-            // Prioridad 2: Fallback instanciando el Prefab directamente en la raíz del mundo (parent = null)
+            // Prioridad 2: Fallback instanciando el Prefab directamente en la raíz del mundo
             if (projectile != null)
             {
                 GameObject newProjectile = Instantiate(projectile, firePosition, fireRotation, null);
@@ -220,19 +259,20 @@ namespace Simu1.Weapons
                     void HandleImpact(ProjectileImpactData impactData)
                     {
                         projBase.OnImpactDetected -= HandleImpact;
+                        Model.SetImpactResults(impactData.HorizontalDistance, impactData.MaxHeight);
                         OnLastShotImpact?.Invoke(impactData);
                     }
                     projBase.OnImpactDetected += HandleImpact;
 
-                    projBase.Launch(fireDirection, impulse, projectileMass);
+                    projBase.Launch(fireDirection, impulse, mass);
                 }
                 else if (newProjectile.TryGetComponent<ILaunchable>(out var launchable))
                 {
-                    launchable.Launch(fireDirection, impulse, projectileMass);
+                    launchable.Launch(fireDirection, impulse, mass);
                 }
                 else if (newProjectile.TryGetComponent<Rigidbody>(out var rb))
                 {
-                    rb.mass = projectileMass;
+                    rb.mass = mass;
                     rb.AddForce(fireDirection.normalized * impulse, ForceMode.Impulse);
                 }
             }

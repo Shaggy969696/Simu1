@@ -656,7 +656,7 @@ GameObject:
   - component: {fileID: 321753117}
   - component: {fileID: 321753116}
   m_Layer: 0
-  m_Name: Simulador_Canvas
+  m_Name: Canvas
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

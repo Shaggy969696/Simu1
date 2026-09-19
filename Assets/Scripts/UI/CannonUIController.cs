@@ -1,5 +1,8 @@
 using System.Globalization;
+using Simu1.Controller;
+using Simu1.Model;
 using Simu1.Projectiles;
+using Simu1.View;
 using Simu1.Weapons;
 using UnityEngine;
 using UnityEngine.UI;
@@ -7,13 +10,20 @@ using UnityEngine.UI;
 namespace Simu1.UI
 {
     /// <summary>
-    /// Controlador de interfaz de usuario para el simulador balístico.
-    /// Sincroniza controles visuales (Slider, InputFields, Textos) con el componente Arma.
-    /// Cumple con SRP (exclusivo para UI) y DIP (se comunica mediante eventos).
+    /// Adaptador de interfaz de usuario para el simulador balístico.
+    /// Conecta los elementos gráficos con la arquitectura MVC (BallisticController, BallisticView y BallisticData).
+    /// Garantiza compatibilidad retroactiva total con la escena y prefabs existentes.
     /// </summary>
     public class CannonUIController : MonoBehaviour
     {
-        [Header("Referencia al Cañón")]
+        [Header("Componentes MVC")]
+        [Tooltip("Controlador MVC principal.")]
+        [SerializeField] private BallisticController controller;
+
+        [Tooltip("Vista MVC principal.")]
+        [SerializeField] private BallisticView view;
+
+        [Header("Referencia al Cañón (Legacy)")]
         [Tooltip("Componente Arma que controla el cañón. Si no se asigna, se buscará automáticamente en la escena.")]
         [SerializeField] private Arma arma;
 
@@ -38,11 +48,33 @@ namespace Simu1.UI
         [Tooltip("Texto para mostrar la altura máxima (Y) alcanzada.")]
         [SerializeField] private Text heightResultText;
 
+        public BallisticController Controller => controller;
+        public BallisticView View => view;
+
         private void Awake()
         {
             if (arma == null)
             {
                 arma = FindFirstObjectByType<Arma>();
+            }
+
+            SetupMVCComponents();
+        }
+
+        private void SetupMVCComponents()
+        {
+            // Asegurar que la Vista esté presente y configurada
+            if (view == null)
+            {
+                view = GetComponent<BallisticView>() ?? gameObject.AddComponent<BallisticView>();
+            }
+
+            if (view != null)
+            {
+                if (angleValueText != null) view.SetAngleTextLegacy(angleValueText);
+                if (distanceResultText != null) view.SetDistanceTextLegacy(distanceResultText);
+                if (heightResultText != null) view.SetHeightTextLegacy(heightResultText);
+                if (arma != null) view.SetBarrelTransform(arma.transform);
             }
         }
 
@@ -54,41 +86,47 @@ namespace Simu1.UI
 
         private void InitializeUI()
         {
-            if (arma == null)
+            if (arma == null && controller == null)
             {
-                Debug.LogWarning("[CannonUIController] No se encontró el componente Arma en la escena.", this);
+                Debug.LogWarning("[CannonUIController] No se encontró el componente Arma ni BallisticController en la escena.", this);
                 return;
             }
+
+            float currentAngle = arma != null ? arma.LaunchAngle : 45f;
+            float currentForce = arma != null ? arma.LaunchForce : 500f;
+            float currentMass = arma != null ? arma.ProjectileMass : 2f;
 
             // Configurar Slider de Ángulo
             if (angleSlider != null)
             {
-                angleSlider.minValue = 0f;
-                angleSlider.maxValue = 90f;
-                angleSlider.value = arma.LaunchAngle;
+                angleSlider.minValue = BallisticData.MinAngle;
+                angleSlider.maxValue = BallisticData.MaxAngle;
+                angleSlider.value = currentAngle;
             }
-            UpdateAngleText(arma.LaunchAngle);
 
             // Configurar Casillas de Fuerza y Masa
             if (forceInputField != null)
             {
-                forceInputField.text = arma.LaunchForce.ToString("F0", CultureInfo.InvariantCulture);
+                forceInputField.text = currentForce.ToString("F0", CultureInfo.InvariantCulture);
             }
 
             if (massInputField != null)
             {
-                massInputField.text = arma.ProjectileMass.ToString("F1", CultureInfo.InvariantCulture);
+                massInputField.text = currentMass.ToString("F1", CultureInfo.InvariantCulture);
             }
 
-            // Inicializar textos de métricas de impacto
-            if (distanceResultText != null)
+            // Actualizar vista
+            if (view != null)
             {
-                distanceResultText.text = "Distancia XZ: --- m";
+                view.DisplayAngle(currentAngle);
+                view.DisplayParameters(currentForce, currentMass);
+                view.ResetImpactDisplay();
             }
-
-            if (heightResultText != null)
+            else
             {
-                heightResultText.text = "Altura Máx: --- m";
+                UpdateAngleText(currentAngle);
+                if (distanceResultText != null) distanceResultText.text = "Distancia XZ: --- m";
+                if (heightResultText != null) heightResultText.text = "Altura Máx: --- m";
             }
         }
 
@@ -121,7 +159,15 @@ namespace Simu1.UI
             {
                 arma.LaunchAngle = newAngle;
             }
-            UpdateAngleText(newAngle);
+
+            if (view != null)
+            {
+                view.DisplayAngle(newAngle);
+            }
+            else
+            {
+                UpdateAngleText(newAngle);
+            }
         }
 
         private void UpdateAngleText(float angle)
@@ -134,32 +180,26 @@ namespace Simu1.UI
 
         private void OnForceInputEndEdit(string text)
         {
-            if (arma == null || forceInputField == null) return;
-
-            if (TryParseFloatFlexible(text, out float newForce) && newForce > 0f)
+            if (TryParseFloatFlexible(text, out float newForce) && newForce >= 0f)
             {
-                arma.LaunchForce = newForce;
-                forceInputField.text = newForce.ToString("F0", CultureInfo.InvariantCulture);
+                if (arma != null) arma.LaunchForce = newForce;
+                if (forceInputField != null) forceInputField.text = newForce.ToString("F0", CultureInfo.InvariantCulture);
             }
-            else
+            else if (arma != null && forceInputField != null)
             {
-                // Restaurar valor previo válido
                 forceInputField.text = arma.LaunchForce.ToString("F0", CultureInfo.InvariantCulture);
             }
         }
 
         private void OnMassInputEndEdit(string text)
         {
-            if (arma == null || massInputField == null) return;
-
             if (TryParseFloatFlexible(text, out float newMass) && newMass > 0f)
             {
-                arma.ProjectileMass = newMass;
-                massInputField.text = newMass.ToString("F1", CultureInfo.InvariantCulture);
+                if (arma != null) arma.ProjectileMass = newMass;
+                if (massInputField != null) massInputField.text = newMass.ToString("F1", CultureInfo.InvariantCulture);
             }
-            else
+            else if (arma != null && massInputField != null)
             {
-                // Restaurar valor previo válido
                 massInputField.text = arma.ProjectileMass.ToString("F1", CultureInfo.InvariantCulture);
             }
         }
@@ -178,14 +218,21 @@ namespace Simu1.UI
 
         private void HandleImpactResult(ProjectileImpactData impactData)
         {
-            if (distanceResultText != null)
+            if (view != null)
             {
-                distanceResultText.text = $"Distancia XZ: {impactData.HorizontalDistance:F2} m";
+                view.DisplayImpactResults(impactData.HorizontalDistance, impactData.MaxHeight);
             }
-
-            if (heightResultText != null)
+            else
             {
-                heightResultText.text = $"Altura Máx: {impactData.MaxHeight:F2} m";
+                if (distanceResultText != null)
+                {
+                    distanceResultText.text = $"Distancia XZ: {impactData.HorizontalDistance:F2} m";
+                }
+
+                if (heightResultText != null)
+                {
+                    heightResultText.text = $"Altura Máx: {impactData.MaxHeight:F2} m";
+                }
             }
         }
 
