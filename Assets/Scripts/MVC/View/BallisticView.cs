@@ -1,7 +1,10 @@
+using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Simu1.Model;
 
 namespace Simu1.View
 {
@@ -164,7 +167,7 @@ namespace Simu1.View
                 "Tiempo de vuelo: {0:F2} s\n" +
                 "Punto de impacto: ({1:F1}, {2:F1}, {3:F1})\n" +
                 "Velocidad relativa: {4:F1} m/s\n" +
-                "Impulso de choque: {5:F1} N·s\n" +
+                "Impulso de colisión: {5:F1} N·s\n" +
                 "Piezas derribadas: {6} / {7}",
                 flightTime,
                 impactPoint.x, impactPoint.y, impactPoint.z,
@@ -177,6 +180,64 @@ namespace Simu1.View
             SetText(reportDetailsTextTMP, reportDetailsTextLegacy, details);
 
             Debug.Log($"[Reporte de Tiro] {scoreFormatted} | {details.Replace("\n", " | ")}");
+        }
+
+        /// <summary>
+        /// Muestra el historial técnico acumulativo de ensayos balísticos en el panel modal (simulador de toma de datos).
+        /// </summary>
+        public void DisplayShotHistory(IReadOnlyList<ShotRecord> history, int totalCumulativeScore)
+        {
+            if (shotReportPanel != null)
+            {
+                shotReportPanel.SetActive(true);
+            }
+
+            int count = history != null ? history.Count : 0;
+            string headerFormatted = count == 1 
+                ? "REGISTRO TÉCNICO: 1 ENSAYO REGISTRADO"
+                : $"REGISTRO TÉCNICO: {count} ENSAYOS REGISTRADOS";
+
+            SetText(reportScoreTextTMP, reportScoreTextLegacy, headerFormatted);
+
+            if (history == null || history.Count == 0)
+            {
+                SetText(reportDetailsTextTMP, reportDetailsTextLegacy, "Sin ensayos registrados en la sesión actual.\nRealiza un disparo para iniciar la adquisición de datos.");
+                return;
+            }
+
+            var sb = new StringBuilder();
+            // Mostrar los ensayos en orden inverso (el más reciente arriba de todo)
+            for (int i = history.Count - 1; i >= 0; i--)
+            {
+                var r = history[i];
+                string isLatestTag = (i == history.Count - 1) ? " [ÚLTIMO ENSAYO]" : "";
+
+                sb.AppendLine($"<size=17><b>=== ENSAYO #{r.AttemptIndex}{isLatestTag} ===</b></size>");
+                sb.AppendLine(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "  • <b>Tiempo de vuelo:</b> {0:F2} s\n" +
+                    "  • <b>Punto de impacto:</b> ({1:F1}, {2:F1}, {3:F1})\n" +
+                    "  • <b>Velocidad relativa:</b> {4:F1} m/s\n" +
+                    "  • <b>Impulso de colisión:</b> {5:F1} N·s\n" +
+                    "  • <b>Piezas derribadas:</b> {6} / {7}",
+                    r.FlightTime,
+                    r.ImpactPosition.x, r.ImpactPosition.y, r.ImpactPosition.z,
+                    r.RelativeSpeed,
+                    r.CollisionImpulse,
+                    r.FallenPieces,
+                    r.TotalPieces
+                ));
+
+                if (i > 0)
+                {
+                    sb.AppendLine("\n────────────────────────────────────────\n");
+                }
+            }
+
+            string fullDetails = sb.ToString().TrimEnd();
+            SetText(reportDetailsTextTMP, reportDetailsTextLegacy, fullDetails);
+
+            Debug.Log($"[Telemetría Balística] {headerFormatted} | Ensayos mostrados: {count}");
         }
 
         /// <summary>

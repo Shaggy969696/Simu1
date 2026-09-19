@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Simu1.Model
@@ -34,11 +35,13 @@ namespace Simu1.Model
         private int lastScore;
         private Vector3 lastImpactPosition;
         private bool hasImpactData;
+        private readonly List<ShotRecord> shotHistory = new List<ShotRecord>();
 
         // Eventos desacoplados para observadores externos del modelo
         public event Action OnDataChanged;
         public event Action<float, float> OnImpactRecorded;
         public event Action OnShotReportUpdated;
+        public event Action OnShotHistoryUpdated;
 
         // Propiedades encapsuladas con validación estricta
         public float LaunchAngle
@@ -120,6 +123,10 @@ namespace Simu1.Model
         public int LastScore => lastScore;
         public Vector3 LastImpactPosition => lastImpactPosition;
         public bool HasImpactData => hasImpactData;
+        public IReadOnlyList<ShotRecord> ShotHistory => shotHistory;
+        public int TotalCumulativeScore => CalculateTotalCumulativeScore();
+        public int TotalAttemptsCount => shotHistory.Count;
+        public ShotRecord? LastShotRecord => shotHistory.Count > 0 ? shotHistory[shotHistory.Count - 1] : (ShotRecord?)null;
 
         /// <summary>
         /// Constructor del modelo con parámetros iniciales opcionales.
@@ -253,6 +260,76 @@ namespace Simu1.Model
 
             OnShotReportUpdated?.Invoke();
             OnDataChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Registra formalmente el disparo actual en el historial acumulativo del modelo.
+        /// </summary>
+        public ShotRecord RecordShot(
+            float horizontalDistance,
+            float maxHeight,
+            float flightTime = 0f,
+            float relativeVelocity = 0f,
+            float collisionImpulse = 0f,
+            int fallenPieces = 0,
+            int totalPieces = 0,
+            int structureScore = 0,
+            Vector3 impactPosition = default)
+        {
+            SetImpactResults(
+                horizontalDistance: horizontalDistance,
+                maxHeight: maxHeight,
+                flightTime: flightTime,
+                relativeVelocity: relativeVelocity,
+                collisionImpulse: collisionImpulse,
+                fallenPieces: fallenPieces,
+                structureScore: structureScore,
+                impactPosition: impactPosition
+            );
+
+            var record = new ShotRecord(
+                attemptIndex: shotHistory.Count + 1,
+                angle: launchAngle,
+                force: force,
+                mass: projectileMass,
+                barrelLength: barrelLength,
+                flightTime: lastFlightTime,
+                horizontalDistance: lastHorizontalDistance,
+                maxHeight: lastMaxHeight,
+                impactPosition: lastImpactPosition,
+                relativeSpeed: lastRelativeVelocity,
+                collisionImpulse: lastCollisionImpulse,
+                fallenPieces: lastFallenPieces,
+                totalPieces: totalPieces,
+                score: lastScore
+            );
+
+            shotHistory.Add(record);
+            OnShotHistoryUpdated?.Invoke();
+            return record;
+        }
+
+        /// <summary>
+        /// Calcula la suma de puntuaciones acumuladas de todos los disparos registrados.
+        /// </summary>
+        public int CalculateTotalCumulativeScore()
+        {
+            int total = 0;
+            for (int i = 0; i < shotHistory.Count; i++)
+            {
+                total += shotHistory[i].Score;
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// Limpia completamente el historial de intentos acumulados y restablece las métricas.
+        /// </summary>
+        public void ClearHistory()
+        {
+            shotHistory.Clear();
+            ResetImpact();
+            OnShotHistoryUpdated?.Invoke();
         }
 
         #endregion

@@ -51,6 +51,9 @@ namespace Simu1.Controller
         [Tooltip("Botón opcional en el panel de controles para restablecer.")]
         [SerializeField] private Button panelResetButton;
 
+        [Tooltip("Botón opcional para borrar completamente el historial acumulativo.")]
+        [SerializeField] private Button clearHistoryButton;
+
         [Header("Referencias de Disparo y Lanzamiento")]
         [Tooltip("Gestor de Object Pooling para proyectiles.")]
         [SerializeField] private ProjectilePool projectilePool;
@@ -220,6 +223,11 @@ namespace Simu1.Controller
             if (panelResetButton != null)
             {
                 panelResetButton.onClick.AddListener(ResetAttempt);
+            }
+
+            if (clearHistoryButton != null)
+            {
+                clearHistoryButton.onClick.AddListener(ClearHistory);
             }
         }
 
@@ -451,36 +459,44 @@ namespace Simu1.Controller
             int totalCount = targetStructureManager != null ? targetStructureManager.TotalPiecesCount : 0;
             int structureScore = targetStructureManager != null ? targetStructureManager.CurrentScore : 0;
 
-            // 4. Actualizar el Modelo
+            // 4. Actualizar el Modelo registrando el tiro en el historial acumulativo
             if (model != null)
             {
-                model.SetImpactResults(
+                model.RecordShot(
                     horizontalDistance: impactData.HorizontalDistance,
                     maxHeight: impactData.MaxHeight,
                     flightTime: impactData.FlightTime,
                     relativeVelocity: impactData.RelativeSpeed,
                     collisionImpulse: impactData.ImpulseMagnitude,
                     fallenPieces: fallenCount,
+                    totalPieces: totalCount,
                     structureScore: structureScore,
                     impactPosition: impactData.ImpactPosition
                 );
             }
 
-            // 5. Notificar a la Vista para presentar los resultados y el reporte
+            // 5. Notificar a la Vista para presentar el historial acumulativo de disparos
             if (view != null)
             {
                 view.DisplayImpactResults(impactData.HorizontalDistance, impactData.MaxHeight);
 
-                int totalScore = model != null ? model.LastScore : structureScore;
-                view.DisplayShotReport(
-                    score: totalScore,
-                    flightTime: impactData.FlightTime,
-                    impactPoint: impactData.ImpactPosition,
-                    relativeSpeed: impactData.RelativeSpeed,
-                    collisionImpulse: impactData.ImpulseMagnitude,
-                    fallenPieces: fallenCount,
-                    totalPieces: totalCount
-                );
+                if (model != null && model.ShotHistory != null && model.ShotHistory.Count > 0)
+                {
+                    view.DisplayShotHistory(model.ShotHistory, model.TotalCumulativeScore);
+                }
+                else
+                {
+                    int totalScore = model != null ? model.LastScore : structureScore;
+                    view.DisplayShotReport(
+                        score: totalScore,
+                        flightTime: impactData.FlightTime,
+                        impactPoint: impactData.ImpactPosition,
+                        relativeSpeed: impactData.RelativeSpeed,
+                        collisionImpulse: impactData.ImpulseMagnitude,
+                        fallenPieces: fallenCount,
+                        totalPieces: totalCount
+                    );
+                }
             }
 
             isShootingInProgress = false;
@@ -533,12 +549,25 @@ namespace Simu1.Controller
             }
         }
 
+        /// <summary>
+        /// Limpia completamente el historial acumulado en el Modelo, restablece la escena y oculta el modal.
+        /// </summary>
+        public void ClearHistory()
+        {
+            if (model != null)
+            {
+                model.ClearHistory();
+            }
+            ResetAttempt();
+        }
+
         #endregion
 
         #region Utilidades y Setters
 
         public void SetResetButton(Button button) => resetButton = button;
         public void SetPanelResetButton(Button button) => panelResetButton = button;
+        public void SetClearHistoryButton(Button button) => clearHistoryButton = button;
         public void SetFireButton(Button button) => fireButton = button;
         public void SetMinSettlementDelay(float delay) => minSettlementDelay = delay;
         public void SetMaxSettlementTimeout(float timeout) => maxSettlementTimeout = timeout;

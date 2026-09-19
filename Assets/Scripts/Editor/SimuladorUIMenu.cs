@@ -239,10 +239,10 @@ namespace Simu1.Editor
             reportRect.anchorMax = new Vector2(1f, 1f);
             reportRect.pivot = new Vector2(1f, 1f);
             reportRect.anchoredPosition = new Vector2(-25f, -25f);
-            reportRect.sizeDelta = new Vector2(380f, 380f);
+            reportRect.sizeDelta = new Vector2(530f, 660f);
 
             Image reportImage = reportPanelGO.GetComponent<Image>();
-            reportImage.color = new Color(0.08f, 0.11f, 0.17f, 0.96f);
+            reportImage.color = new Color(0.07f, 0.09f, 0.14f, 0.97f);
 
             VerticalLayoutGroup reportLayout = reportPanelGO.AddComponent<VerticalLayoutGroup>();
             reportLayout.padding = new RectOffset(18, 18, 16, 16);
@@ -252,40 +252,66 @@ namespace Simu1.Editor
             reportLayout.childForceExpandWidth = true;
             reportLayout.childForceExpandHeight = false;
 
-            // Título del reporte
-            CreateLabel(reportPanelGO.transform, "REPORTE DE TIRO", 18, FontStyle.Bold, new Color(0.4f, 0.8f, 1f), TextAnchor.MiddleCenter);
+            // Título técnico
+            CreateLabel(reportPanelGO.transform, "REGISTRO TÉCNICO DE ENSAYOS", 18, FontStyle.Bold, new Color(0.4f, 0.8f, 1f), TextAnchor.MiddleCenter);
             CreateSeparator(reportPanelGO.transform);
 
-            // Puntuación destacada
-            GameObject scoreLabelGO = CreateLabel(reportPanelGO.transform, "PUNTUACIÓN: 0", 22, FontStyle.Bold, new Color(1f, 0.85f, 0.2f), TextAnchor.MiddleCenter).gameObject;
+            // Resumen de estado de adquisición de datos
+            GameObject scoreLabelGO = CreateLabel(reportPanelGO.transform, "REGISTRO TÉCNICO: 0 ENSAYOS", 16, FontStyle.Bold, new Color(0.35f, 0.85f, 1f), TextAnchor.MiddleCenter).gameObject;
             scoreLabelGO.name = "Text_PuntuacionReporte";
             Text reportScoreText = scoreLabelGO.GetComponent<Text>();
 
-            // Tarjeta interna de detalles
-            GameObject detailsCard = DefaultControls.CreatePanel(uiResources);
-            detailsCard.name = "Card_Detalles";
-            detailsCard.transform.SetParent(reportPanelGO.transform, false);
-            detailsCard.GetComponent<Image>().color = new Color(0.04f, 0.06f, 0.10f, 0.9f);
+            // ScrollView para el historial técnico
+            GameObject scrollGO = DefaultControls.CreateScrollView(uiResources);
+            scrollGO.name = "Scroll_Historial";
+            scrollGO.transform.SetParent(reportPanelGO.transform, false);
 
-            VerticalLayoutGroup detailsLayout = detailsCard.AddComponent<VerticalLayoutGroup>();
-            detailsLayout.padding = new RectOffset(12, 12, 10, 10);
-            detailsLayout.spacing = 3f;
-            detailsLayout.childControlWidth = true;
-            detailsLayout.childControlHeight = false;
+            LayoutElement scrollLayout = scrollGO.AddComponent<LayoutElement>();
+            scrollLayout.minHeight = 420f;
+            scrollLayout.preferredHeight = 480f;
+            scrollLayout.flexibleHeight = 1f;
 
-            string initialDetails = "Tiempo de vuelo: --- s\n" +
-                                   "Punto de impacto: ---\n" +
-                                   "Velocidad relativa: --- m/s\n" +
-                                   "Impulso de choque: --- N·s\n" +
-                                   "Piezas derribadas: 0 / 13";
+            ScrollRect scrollRect = scrollGO.GetComponent<ScrollRect>();
+            scrollRect.horizontal = false;
+            scrollRect.vertical = true;
 
-            Text reportDetailsText = CreateLabel(detailsCard.transform, initialDetails, 13, FontStyle.Normal, new Color(0.92f, 0.94f, 0.98f));
+            Transform hScrollbar = scrollGO.transform.Find("Scrollbar Horizontal");
+            if (hScrollbar != null)
+            {
+                Object.DestroyImmediate(hScrollbar.gameObject);
+            }
+
+            Transform content = scrollGO.transform.Find("Viewport/Content");
+            if (content != null)
+            {
+                VerticalLayoutGroup contentLayout = content.gameObject.AddComponent<VerticalLayoutGroup>();
+                contentLayout.padding = new RectOffset(12, 12, 12, 12);
+                contentLayout.spacing = 8f;
+                contentLayout.childControlWidth = true;
+                contentLayout.childControlHeight = true;
+                contentLayout.childForceExpandWidth = true;
+                contentLayout.childForceExpandHeight = false;
+
+                ContentSizeFitter fitter = content.gameObject.AddComponent<ContentSizeFitter>();
+                fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+                fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            }
+
+            string initialDetails = "Sin ensayos registrados en la sesión actual.\nRealiza un disparo para registrar las magnitudes de impacto.";
+
+            Text reportDetailsText = CreateLabel(content != null ? content : scrollGO.transform, initialDetails, 16, FontStyle.Normal, new Color(0.94f, 0.96f, 1f));
             reportDetailsText.name = "Text_DetallesReporte";
-            reportDetailsText.lineSpacing = 1.25f;
+            reportDetailsText.verticalOverflow = VerticalWrapMode.Overflow;
+            reportDetailsText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            reportDetailsText.lineSpacing = 1.35f;
 
-            // Botón de Nuevo Intento en el Reporte
-            GameObject modalResetGO = CreateCustomButton(reportPanelGO.transform, "Boton_NuevoIntento", "NUEVO INTENTO", new Color(0.12f, 0.58f, 0.42f, 1f), 40f, uiResources);
+            // Botón de Nuevo Ensayo (conserva historial)
+            GameObject modalResetGO = CreateCustomButton(reportPanelGO.transform, "Boton_NuevoIntento", "NUEVO ENSAYO", new Color(0.12f, 0.58f, 0.42f, 1f), 40f, uiResources);
             Button modalResetBtn = modalResetGO.GetComponent<Button>();
+
+            // Botón para limpiar registro
+            GameObject clearHistoryGO = CreateCustomButton(reportPanelGO.transform, "Boton_BorrarHistorial", "LIMPIAR REGISTRO", new Color(0.38f, 0.18f, 0.20f, 1f), 32f, uiResources);
+            Button clearHistoryBtn = clearHistoryGO.GetComponent<Button>();
 
             // Iniciar el panel de reporte oculto hasta que concluya un disparo
             reportPanelGO.SetActive(false);
@@ -323,6 +349,12 @@ namespace Simu1.Editor
             if (panelResetProp != null)
             {
                 panelResetProp.objectReferenceValue = panelResetBtn;
+            }
+
+            var clearHistProp = soCtrl.FindProperty("clearHistoryButton");
+            if (clearHistProp != null)
+            {
+                clearHistProp.objectReferenceValue = clearHistoryBtn;
             }
 
             TargetStructureManager structureManager = Object.FindFirstObjectByType<TargetStructureManager>();

@@ -33,10 +33,14 @@ Simulador balístico interactivo y de destrucción estructural por articulacione
      - Los bloques unidos por `FixedJoint` se romperán si el impacto supera la fuerza de quiebre.
      - La diana pendular (`HingeJoint`) oscilará al recibir el golpe.
      - La diana elástica (`SpringJoint`) absorberá parte de la energía y rebotará con resorte y amortiguación.
-6. **Consultar el Reporte de Tiro:**
-   - Al asentarse los escombros de la estructura, se desplegará automáticamente la ventana modal **Reporte de Tiro** en la esquina superior derecha, mostrando la puntuación obtenida, tiempo de vuelo, velocidad relativa, impulso del choque y piezas derribadas.
-7. **Reiniciar la prueba:**
-   - Haz clic en **`NUEVO INTENTO`** dentro de la ventana de reporte o en **`RESTABLECER ESCENA`** en el panel de control. Todos los proyectiles volverán al pool y la torre se reconstruirá en reposo con cero tensión física.
+6. **Consultar el Registro Técnico de Ensayos (Telemetría de Datos):**
+   - Al asentarse los escombros de la estructura, se desplegará automáticamente el panel **Registro Técnico de Ensayos** en la esquina superior derecha, con un visor scrollable que detalla la telemetría física completa de cada ensayo:
+     - **Parámetros de Entrada:** Ángulo de elevación ($\theta$), fuerza aplicada ($F$), masa del proyectil ($m$), longitud del cañón ($L$), velocidad inicial teórica ($v_0$) e impulso inicial ($J_0$).
+     - **Magnitudes Físicas Medidas:** Tiempo de vuelo ($t$), alcance horizontal ($d_{xz}$), altura máxima ($h_{max}$), coordenadas $XYZ$ de impacto, velocidad relativa en el choque ($v_{rel}$), impulso transferido ($J_c$) y piezas derribadas ($N / Total$).
+7. **Continuar registrando o reiniciar lote:**
+   - Haz clic en **`NUEVO ENSAYO`** para restablecer la escena y registrar el siguiente tiro sin perder las mediciones previas.
+   - Haz clic en **`LIMPIAR REGISTRO`** para vaciar la memoria de datos y comenzar una nueva serie experimental desde el Ensayo #1.
+   - O usa **`RESTABLECER ESCENA`** en el panel de control inferior para reiniciar la torre en cualquier instante.
 
 ---
 
@@ -50,7 +54,8 @@ Simulador balístico interactivo y de destrucción estructural por articulacione
 | **`Campo "Masa"`** | **Masa en Kilogramos** | Asigna la masa inercial ($m$) del proyectil calculada por el motor de físicas. |
 | **`Botón DISPARAR`** | **Disparar (UI)** | Alternativa al teclado para lanzar el proyectil desde la interfaz. |
 | **`Botón RESTABLECER`** | **Reset Inmediato** | Restaura la torre y recicla proyectiles en cualquier instante sin esperar el reporte. |
-| **`Botón NUEVO INTENTO`** | **Continuar / Reset** | Oculta el modal de reporte y prepara la escena para el siguiente lanzamiento. |
+| **`Botón NUEVO ENSAYO`** | **Siguiente Ensayo** | Oculta el panel, restaura la escena y **acumula la telemetría** para el próximo tiro. |
+| **`Botón LIMPIAR REGISTRO`** | **Vaciar Registro** | Limpia el historial acumulativo del Modelo e inicia la serie desde el Ensayo #1. |
 
 ---
 
@@ -137,20 +142,28 @@ flowchart LR
 
 ---
 
-### 5. Reporte de Tiro y Puntuación
-Al finalizar cada tiro y asentarse los escombros (`IsStructureSettled()`), se calcula la puntuación mediante la fórmula:
-$$\text{Puntaje} = (\text{Piezas Derribadas} \times 200) + (\text{Impulso de Choque} \times 10) - (\text{Tiempo de Vuelo} \times 5)$$
-El resultado se presenta en la tarjeta modal con formato numérico independiente de la región (`CultureInfo.InvariantCulture`).
+### 5. Adquisición y Registro Técnico de Datos (Data Logging)
+Al finalizar cada tiro y asentarse los escombros (`IsStructureSettled()`):
+- El Modelo (`BallisticData`) registra una nueva entrada inmutable `ShotRecord` con las magnitudes cinemáticas y dinámicas medidas.
+- El panel emergente **Registro Técnico de Ensayos** despliega un visor con desplazamiento vertical (`ScrollRect`), presentando:
+  - **Encabezado Técnico:** Contador total de ensayos registrados en la serie experimental.
+  - **Ficha Técnica por Ensayo:**
+    - **Parámetros de entrada:** Ángulo ($\theta$), fuerza mecánica ($F$), masa ($m$), longitud del cañón ($L$), velocidad inicial teórica ($v_0$) e impulso inicial ($J_0$).
+    - **Magnitudes físicas medidas:** Tiempo de vuelo ($t$), alcance horizontal ($d_{xz}$), altura máxima ($h_{max}$), coordenadas tridimensionales de impacto $(X, Y, Z)$, velocidad relativa de choque ($v_{rel}$), impulso de colisión ($J_c$) y daño estructural ($N / Total$).
+  - **Gestión Experimental:** Botón `NUEVO ENSAYO` para continuar registrando lanzamientos sin perder datos y botón `LIMPIAR REGISTRO` para reiniciar la serie experimental.
 
 ---
 
-### 6. Calidad de Código y Pruebas Automatizadas
+### 6. Calidad de Código y Pruebas Automatizadas (11/11 Pruebas)
 El proyecto incluye pruebas unitarias ejecutables desde el **Unity Test Runner** (`Window > General > Test Runner`):
-- **`BallisticDataTests.cs` (4/4 pruebas aprobadas):**
+- **`BallisticDataTests.cs` (7/7 pruebas aprobadas):**
   - Validación de rangos de ángulo y fuerza.
   - Cálculo de impulso inicial según trabajo y energía.
   - Fórmula de puntuación y registro de magnitudes de impacto.
-  - Limpieza de datos en reinicio.
+  - Limpieza de métricas transitorias en reinicio.
+  - Acumulación correlativa de intentos en el historial (`RecordShot`).
+  - Persistencia del historial acumulativo ante `ResetImpact()`.
+  - Vaciado total del registro y puntuación con `ClearHistory()`.
 - **`TargetStructureTests.cs` (4/4 pruebas aprobadas):**
   - Estabilidad inicial en reposo (0 derribos prematuros).
   - Detección de caída por límite de altura.
@@ -179,7 +192,8 @@ Assets/
     │   ├── Controller/
     │   │   └── BallisticController.cs
     │   ├── Model/
-    │   │   └── BallisticData.cs
+    │   │   ├── BallisticData.cs
+    │   │   └── ShotRecord.cs
     │   └── View/
     │       └── BallisticView.cs
     ├── Pooling/

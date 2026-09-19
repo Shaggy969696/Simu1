@@ -94,5 +94,95 @@ namespace Simu1.Tests
             Assert.AreEqual(0, data.LastFallenPieces);
             Assert.AreEqual(0, data.LastScore);
         }
+
+        [Test]
+        public void RecordShot_AddsEntryToHistoryAndCalculatesCumulativeScore()
+        {
+            var data = new BallisticData(initialAngle: 45f, initialForce: 500f, initialMass: 2f);
+            bool historyUpdatedFired = false;
+            data.OnShotHistoryUpdated += () => historyUpdatedFired = true;
+
+            var rec1 = data.RecordShot(
+                horizontalDistance: 30f,
+                maxHeight: 10f,
+                flightTime: 1.5f,
+                relativeVelocity: 15f,
+                collisionImpulse: 40f,
+                fallenPieces: 2,
+                totalPieces: 13
+            );
+
+            Assert.IsTrue(historyUpdatedFired);
+            Assert.AreEqual(1, data.TotalAttemptsCount);
+            Assert.AreEqual(1, rec1.AttemptIndex);
+            Assert.AreEqual(45f, rec1.Angle);
+            Assert.AreEqual(500f, rec1.Force);
+            Assert.AreEqual(2f, rec1.Mass);
+            Assert.AreEqual(1.5f, rec1.FlightTime);
+            Assert.AreEqual(30f, rec1.HorizontalDistance, 0.001f);
+            Assert.AreEqual(10f, rec1.MaxHeight, 0.001f);
+            Assert.Greater(rec1.InitialVelocity, 0f);
+            Assert.Greater(rec1.InitialImpulse, 0f);
+            Assert.AreEqual(2, rec1.FallenPieces);
+            Assert.AreEqual(13, rec1.TotalPieces);
+
+            // Second shot
+            data.LaunchAngle = 35f;
+            data.Force = 700f;
+            var rec2 = data.RecordShot(
+                horizontalDistance: 35f,
+                maxHeight: 8f,
+                flightTime: 1.2f,
+                relativeVelocity: 20f,
+                collisionImpulse: 60f,
+                fallenPieces: 4,
+                totalPieces: 13
+            );
+
+            Assert.AreEqual(2, data.TotalAttemptsCount);
+            Assert.AreEqual(2, rec2.AttemptIndex);
+            Assert.AreEqual(35f, rec2.Angle);
+            Assert.AreEqual(700f, rec2.Force);
+            Assert.AreEqual(rec1.Score + rec2.Score, data.TotalCumulativeScore);
+            Assert.AreEqual(rec2.Score, data.LastShotRecord.Value.Score);
+        }
+
+        [Test]
+        public void ResetImpact_PreservesShotHistory()
+        {
+            var data = new BallisticData();
+            data.RecordShot(25f, 8f, 1.2f, 10f, 30f, 2, 13);
+            data.RecordShot(30f, 9f, 1.4f, 12f, 40f, 3, 13);
+
+            Assert.AreEqual(2, data.TotalAttemptsCount);
+            int cumulativeBefore = data.TotalCumulativeScore;
+            Assert.Greater(cumulativeBefore, 0);
+
+            // Simulating ResetAttempt after a shot
+            data.ResetImpact();
+
+            // Last shot transient metrics are cleared
+            Assert.IsFalse(data.HasImpactData);
+            Assert.AreEqual(0f, data.LastFlightTime);
+
+            // But cumulative history is preserved
+            Assert.AreEqual(2, data.TotalAttemptsCount);
+            Assert.AreEqual(cumulativeBefore, data.TotalCumulativeScore);
+        }
+
+        [Test]
+        public void ClearHistory_EmptiesHistoryAndResetsScore()
+        {
+            var data = new BallisticData();
+            data.RecordShot(25f, 8f, 1.2f, 10f, 30f, 2, 13);
+            Assert.AreEqual(1, data.TotalAttemptsCount);
+
+            data.ClearHistory();
+
+            Assert.AreEqual(0, data.TotalAttemptsCount);
+            Assert.AreEqual(0, data.TotalCumulativeScore);
+            Assert.IsFalse(data.HasImpactData);
+            Assert.IsNull(data.LastShotRecord);
+        }
     }
 }
