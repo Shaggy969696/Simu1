@@ -97,6 +97,7 @@ namespace Simu1.Projectiles
             launchTime = 0f;
             launchPosition = Vector3.zero;
             transform.localScale = Vector3.one;
+            OnImpactDetected = null;
         }
 
         /// <summary>

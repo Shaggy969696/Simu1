@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 namespace Simu1.Model
 {
@@ -31,6 +32,7 @@ namespace Simu1.Model
         private float lastCollisionImpulse;
         private int lastFallenPieces;
         private int lastScore;
+        private Vector3 lastImpactPosition;
         private bool hasImpactData;
 
         // Eventos desacoplados para observadores externos del modelo
@@ -116,6 +118,7 @@ namespace Simu1.Model
         public float LastCollisionImpulse => lastCollisionImpulse;
         public int LastFallenPieces => lastFallenPieces;
         public int LastScore => lastScore;
+        public Vector3 LastImpactPosition => lastImpactPosition;
         public bool HasImpactData => hasImpactData;
 
         /// <summary>
@@ -135,6 +138,7 @@ namespace Simu1.Model
             lastCollisionImpulse = 0f;
             lastFallenPieces = 0;
             lastScore = 0;
+            lastImpactPosition = Vector3.zero;
             hasImpactData = false;
         }
 
@@ -195,10 +199,11 @@ namespace Simu1.Model
 
         /// <summary>
         /// Calcula la puntuación del disparo combinando piezas derribadas e impulso transferido.
+        /// Permite utilizar los valores específicos de puntos de la estructura o el valor base por pieza.
         /// </summary>
-        public int CalculateScore(int fallenPieces, float impulse)
+        public int CalculateScore(int fallenPieces, float impulse, int structureScore = 0)
         {
-            int pieceScore = Math.Max(0, fallenPieces) * 100;
+            int pieceScore = structureScore > 0 ? structureScore : Math.Max(0, fallenPieces) * 100;
             int impulseScore = (int)Math.Round(Math.Max(0f, impulse) * 2f);
             return pieceScore + impulseScore;
         }
@@ -212,7 +217,9 @@ namespace Simu1.Model
             float flightTime = 0f, 
             float relativeVelocity = 0f, 
             float collisionImpulse = 0f, 
-            int fallenPieces = 0)
+            int fallenPieces = 0,
+            int structureScore = 0,
+            Vector3 impactPosition = default)
         {
             lastHorizontalDistance = Math.Max(0f, horizontalDistance);
             lastMaxHeight = maxHeight;
@@ -220,7 +227,8 @@ namespace Simu1.Model
             lastRelativeVelocity = Math.Max(0f, relativeVelocity);
             lastCollisionImpulse = Math.Max(0f, collisionImpulse);
             lastFallenPieces = Math.Max(0, fallenPieces);
-            lastScore = CalculateScore(lastFallenPieces, lastCollisionImpulse);
+            lastScore = CalculateScore(lastFallenPieces, lastCollisionImpulse, structureScore);
+            lastImpactPosition = impactPosition;
             hasImpactData = true;
 
             OnImpactRecorded?.Invoke(lastHorizontalDistance, lastMaxHeight);
@@ -240,6 +248,7 @@ namespace Simu1.Model
             lastCollisionImpulse = 0f;
             lastFallenPieces = 0;
             lastScore = 0;
+            lastImpactPosition = Vector3.zero;
             hasImpactData = false;
 
             OnShotReportUpdated?.Invoke();

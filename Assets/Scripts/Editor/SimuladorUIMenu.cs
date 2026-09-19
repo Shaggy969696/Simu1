@@ -1,6 +1,7 @@
 using System.IO;
 using Simu1.Controller;
 using Simu1.Pooling;
+using Simu1.Targets;
 using Simu1.View;
 using UnityEditor;
 using UnityEngine;
@@ -12,8 +13,9 @@ namespace Simu1.Editor
     /// <summary>
     /// Utilidad de Editor para generar automáticamente la interfaz del Simulador Balístico en la escena.
     /// Crea el Canvas, EventSystem con acciones por defecto para Input System,
-    /// Panel en la esquina inferior izquierda, Slider con gráficos y LayoutElements visibles,
-    /// InputFields de Fuerza y Masa, textos de métricas de impacto, y los conecta con la arquitectura MVC (BallisticController y BallisticView).
+    /// Panel de controles en la esquina inferior izquierda (Slider de ángulo, InputFields de fuerza y masa, botones de disparo y reinicio),
+    /// Modal de Reporte de Tiro en la esquina superior derecha (puntuación, métricas balísticas e impulso de choque, botón de nuevo intento),
+    /// y los conecta con la arquitectura MVC (BallisticController y BallisticView).
     /// </summary>
     public static class SimuladorUIMenu
     {
@@ -23,6 +25,14 @@ namespace Simu1.Editor
         {
             // 0. Si ya existe un Canvas previo del simulador en la escena, removerlo para regenerar limpio
             GameObject existingCanvas = GameObject.Find("Simulador_Canvas");
+            if (existingCanvas == null)
+            {
+                var panel = GameObject.Find("Panel_Controles");
+                if (panel != null)
+                {
+                    existingCanvas = panel.transform.root.gameObject;
+                }
+            }
             if (existingCanvas != null)
             {
                 Undo.DestroyObjectImmediate(existingCanvas);
@@ -82,7 +92,9 @@ namespace Simu1.Editor
             canvasGO.AddComponent<GraphicRaycaster>();
             Undo.RegisterCreatedObjectUndo(canvasGO, "Crear Canvas Simulador");
 
-            // 4. Crear Panel Contenedor en la esquina inferior izquierda
+            // =========================================================================
+            // 4. PANEL DE CONTROLES (Esquina Inferior Izquierda)
+            // =========================================================================
             GameObject panelGO = DefaultControls.CreatePanel(uiResources);
             panelGO.name = "Panel_Controles";
             panelGO.transform.SetParent(canvasGO.transform, false);
@@ -92,14 +104,14 @@ namespace Simu1.Editor
             panelRect.anchorMax = new Vector2(0f, 0f);
             panelRect.pivot = new Vector2(0f, 0f);
             panelRect.anchoredPosition = new Vector2(25f, 25f);
-            panelRect.sizeDelta = new Vector2(360f, 440f);
+            panelRect.sizeDelta = new Vector2(360f, 540f);
 
             Image panelImage = panelGO.GetComponent<Image>();
-            panelImage.color = new Color(0.10f, 0.13f, 0.18f, 0.92f); // Azul grisáceo oscuro elegante
+            panelImage.color = new Color(0.10f, 0.13f, 0.18f, 0.94f);
 
             VerticalLayoutGroup layout = panelGO.AddComponent<VerticalLayoutGroup>();
             layout.padding = new RectOffset(16, 16, 16, 16);
-            layout.spacing = 10f;
+            layout.spacing = 8f;
             layout.childControlWidth = true;
             layout.childControlHeight = false;
             layout.childForceExpandWidth = true;
@@ -107,8 +119,6 @@ namespace Simu1.Editor
 
             // Título
             CreateLabel(panelGO.transform, "SIMULADOR BALÍSTICO", 18, FontStyle.Bold, new Color(0.95f, 0.95f, 1f));
-
-            // Separador 1
             CreateSeparator(panelGO.transform);
 
             // Fila: Ángulo
@@ -125,7 +135,6 @@ namespace Simu1.Editor
             slider.value = 45f;
             slider.interactable = true;
 
-            // LayoutElement para que el slider ocupe el espacio correcto y sea visible en la fila
             LayoutElement sliderLayout = sliderGO.AddComponent<LayoutElement>();
             sliderLayout.minWidth = 180f;
             sliderLayout.preferredWidth = 230f;
@@ -133,7 +142,6 @@ namespace Simu1.Editor
             sliderLayout.minHeight = 24f;
             sliderLayout.preferredHeight = 24f;
 
-            // Asegurar estilos y colores visibles en el Slider
             Transform bg = sliderGO.transform.Find("Background");
             if (bg != null && bg.TryGetComponent<Image>(out var bgImage))
             {
@@ -164,7 +172,7 @@ namespace Simu1.Editor
             angleValueText.text = "45.0°";
             angleValueText.fontSize = 15;
             angleValueText.fontStyle = FontStyle.Bold;
-            angleValueText.color = new Color(0.4f, 0.8f, 1f); // Azul cian claro
+            angleValueText.color = new Color(0.4f, 0.8f, 1f);
             angleValueText.alignment = TextAnchor.MiddleCenter;
 
             LayoutElement textLayout = angleTextGO.AddComponent<LayoutElement>();
@@ -194,6 +202,13 @@ namespace Simu1.Editor
             massInput.contentType = InputField.ContentType.DecimalNumber;
             massInput.text = "2.0";
 
+            // Botones de Disparo y Reinicio en el Panel
+            GameObject fireBtnGO = CreateCustomButton(panelGO.transform, "Boton_Disparar", "DISPARAR [ESPACIO]", new Color(0.18f, 0.52f, 0.88f, 1f), 36f, uiResources);
+            Button panelFireBtn = fireBtnGO.GetComponent<Button>();
+
+            GameObject resetBtnGO = CreateCustomButton(panelGO.transform, "Boton_Restablecer", "RESTABLECER ESCENA", new Color(0.30f, 0.35f, 0.44f, 1f), 30f, uiResources);
+            Button panelResetBtn = resetBtnGO.GetComponent<Button>();
+
             // Card / Panel de Resultados del Último Impacto
             GameObject resultsCard = DefaultControls.CreatePanel(uiResources);
             resultsCard.name = "Card_UltimoImpacto";
@@ -208,14 +223,76 @@ namespace Simu1.Editor
             resultsLayout.childControlWidth = true;
             resultsLayout.childControlHeight = false;
 
-            CreateLabel(resultsCard.transform, "RESULTADOS ÚLTIMO DISPARO:", 12, FontStyle.Bold, new Color(0.9f, 0.75f, 0.3f)); // Dorado suave
+            CreateLabel(resultsCard.transform, "RESULTADOS ÚLTIMO DISPARO:", 12, FontStyle.Bold, new Color(0.9f, 0.75f, 0.3f));
             Text distText = CreateLabel(resultsCard.transform, "Distancia XZ: --- m", 13, FontStyle.Normal, Color.white);
             Text heightText = CreateLabel(resultsCard.transform, "Altura Máx: --- m", 13, FontStyle.Normal, Color.white);
 
-            // Indicación para disparar
-            CreateLabel(panelGO.transform, "Pulsa [ESPACIO] para disparar", 11, FontStyle.Italic, new Color(0.7f, 0.7f, 0.7f), TextAnchor.MiddleCenter);
+            // =========================================================================
+            // 5. MODAL DE REPORTE DE TIRO (Esquina Superior Derecha)
+            // =========================================================================
+            GameObject reportPanelGO = DefaultControls.CreatePanel(uiResources);
+            reportPanelGO.name = "Modal_ReporteTiro";
+            reportPanelGO.transform.SetParent(canvasGO.transform, false);
 
-            // 5. Configurar componentes MVC (BallisticView y BallisticController)
+            RectTransform reportRect = reportPanelGO.GetComponent<RectTransform>();
+            reportRect.anchorMin = new Vector2(1f, 1f);
+            reportRect.anchorMax = new Vector2(1f, 1f);
+            reportRect.pivot = new Vector2(1f, 1f);
+            reportRect.anchoredPosition = new Vector2(-25f, -25f);
+            reportRect.sizeDelta = new Vector2(380f, 380f);
+
+            Image reportImage = reportPanelGO.GetComponent<Image>();
+            reportImage.color = new Color(0.08f, 0.11f, 0.17f, 0.96f);
+
+            VerticalLayoutGroup reportLayout = reportPanelGO.AddComponent<VerticalLayoutGroup>();
+            reportLayout.padding = new RectOffset(18, 18, 16, 16);
+            reportLayout.spacing = 10f;
+            reportLayout.childControlWidth = true;
+            reportLayout.childControlHeight = false;
+            reportLayout.childForceExpandWidth = true;
+            reportLayout.childForceExpandHeight = false;
+
+            // Título del reporte
+            CreateLabel(reportPanelGO.transform, "REPORTE DE TIRO", 18, FontStyle.Bold, new Color(0.4f, 0.8f, 1f), TextAnchor.MiddleCenter);
+            CreateSeparator(reportPanelGO.transform);
+
+            // Puntuación destacada
+            GameObject scoreLabelGO = CreateLabel(reportPanelGO.transform, "PUNTUACIÓN: 0", 22, FontStyle.Bold, new Color(1f, 0.85f, 0.2f), TextAnchor.MiddleCenter).gameObject;
+            scoreLabelGO.name = "Text_PuntuacionReporte";
+            Text reportScoreText = scoreLabelGO.GetComponent<Text>();
+
+            // Tarjeta interna de detalles
+            GameObject detailsCard = DefaultControls.CreatePanel(uiResources);
+            detailsCard.name = "Card_Detalles";
+            detailsCard.transform.SetParent(reportPanelGO.transform, false);
+            detailsCard.GetComponent<Image>().color = new Color(0.04f, 0.06f, 0.10f, 0.9f);
+
+            VerticalLayoutGroup detailsLayout = detailsCard.AddComponent<VerticalLayoutGroup>();
+            detailsLayout.padding = new RectOffset(12, 12, 10, 10);
+            detailsLayout.spacing = 3f;
+            detailsLayout.childControlWidth = true;
+            detailsLayout.childControlHeight = false;
+
+            string initialDetails = "Tiempo de vuelo: --- s\n" +
+                                   "Punto de impacto: ---\n" +
+                                   "Velocidad relativa: --- m/s\n" +
+                                   "Impulso de choque: --- N·s\n" +
+                                   "Piezas derribadas: 0 / 13";
+
+            Text reportDetailsText = CreateLabel(detailsCard.transform, initialDetails, 13, FontStyle.Normal, new Color(0.92f, 0.94f, 0.98f));
+            reportDetailsText.name = "Text_DetallesReporte";
+            reportDetailsText.lineSpacing = 1.25f;
+
+            // Botón de Nuevo Intento en el Reporte
+            GameObject modalResetGO = CreateCustomButton(reportPanelGO.transform, "Boton_NuevoIntento", "NUEVO INTENTO", new Color(0.12f, 0.58f, 0.42f, 1f), 40f, uiResources);
+            Button modalResetBtn = modalResetGO.GetComponent<Button>();
+
+            // Iniciar el panel de reporte oculto hasta que concluya un disparo
+            reportPanelGO.SetActive(false);
+
+            // =========================================================================
+            // 6. Configurar componentes MVC (BallisticView y BallisticController)
+            // =========================================================================
             GameObject cannonGO = GameObject.Find("Cannon");
             GameObject targetGO = cannonGO != null ? cannonGO : canvasGO;
 
@@ -224,6 +301,9 @@ namespace Simu1.Editor
             soView.FindProperty("angleTextLegacy").objectReferenceValue = angleValueText;
             soView.FindProperty("distanceResultTextLegacy").objectReferenceValue = distText;
             soView.FindProperty("heightResultTextLegacy").objectReferenceValue = heightText;
+            soView.FindProperty("shotReportPanel").objectReferenceValue = reportPanelGO;
+            soView.FindProperty("reportScoreTextLegacy").objectReferenceValue = reportScoreText;
+            soView.FindProperty("reportDetailsTextLegacy").objectReferenceValue = reportDetailsText;
             if (cannonGO != null)
             {
                 soView.FindProperty("barrelTransform").objectReferenceValue = cannonGO.transform;
@@ -236,6 +316,21 @@ namespace Simu1.Editor
             soCtrl.FindProperty("angleSlider").objectReferenceValue = slider;
             soCtrl.FindProperty("forceInputField").objectReferenceValue = forceInput;
             soCtrl.FindProperty("massInputField").objectReferenceValue = massInput;
+            soCtrl.FindProperty("fireButton").objectReferenceValue = panelFireBtn;
+            soCtrl.FindProperty("resetButton").objectReferenceValue = modalResetBtn;
+
+            var panelResetProp = soCtrl.FindProperty("panelResetButton");
+            if (panelResetProp != null)
+            {
+                panelResetProp.objectReferenceValue = panelResetBtn;
+            }
+
+            TargetStructureManager structureManager = Object.FindFirstObjectByType<TargetStructureManager>();
+            if (structureManager != null)
+            {
+                soCtrl.FindProperty("targetStructureManager").objectReferenceValue = structureManager;
+            }
+
             if (cannonGO != null)
             {
                 soCtrl.FindProperty("barrelTransform").objectReferenceValue = cannonGO.transform;
@@ -252,7 +347,7 @@ namespace Simu1.Editor
             }
             soCtrl.ApplyModifiedProperties();
 
-            // 6. Guardar como Prefab reutilizable
+            // 7. Guardar como Prefab reutilizable
             string prefabDir = "Assets/Prefab";
             if (!Directory.Exists(prefabDir))
             {
@@ -318,6 +413,39 @@ namespace Simu1.Editor
 
             Image img = sep.AddComponent<Image>();
             img.color = new Color(1f, 1f, 1f, 0.15f);
+        }
+
+        private static GameObject CreateCustomButton(Transform parent, string name, string labelText, Color bgColor, float height, DefaultControls.Resources uiResources)
+        {
+            GameObject btnGO = DefaultControls.CreateButton(uiResources);
+            btnGO.name = name;
+            btnGO.transform.SetParent(parent, false);
+
+            RectTransform rect = btnGO.GetComponent<RectTransform>();
+            rect.sizeDelta = new Vector2(rect.sizeDelta.x, height);
+
+            LayoutElement le = btnGO.AddComponent<LayoutElement>();
+            le.minHeight = height;
+            le.preferredHeight = height;
+            le.flexibleWidth = 1f;
+
+            Image img = btnGO.GetComponent<Image>();
+            if (img != null)
+            {
+                img.color = bgColor;
+            }
+
+            Text txt = btnGO.GetComponentInChildren<Text>();
+            if (txt != null)
+            {
+                txt.text = labelText;
+                txt.fontSize = 14;
+                txt.fontStyle = FontStyle.Bold;
+                txt.color = Color.white;
+                txt.alignment = TextAnchor.MiddleCenter;
+            }
+
+            return btnGO;
         }
     }
 }

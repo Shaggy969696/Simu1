@@ -1,3 +1,4 @@
+using System.Globalization;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -51,6 +52,22 @@ namespace Simu1.View
 
         [Tooltip("Texto UI legacy de masa como fallback.")]
         [SerializeField] private Text massTextLegacy;
+
+        [Header("Panel Reporte de Tiro")]
+        [Tooltip("Contenedor GameObject de la ventana modal o panel de Reporte de Tiro.")]
+        [SerializeField] private GameObject shotReportPanel;
+
+        [Tooltip("Texto para la puntuación en el Reporte de Tiro.")]
+        [SerializeField] private TMP_Text reportScoreTextTMP;
+
+        [Tooltip("Texto con el desglose físico completo del Reporte de Tiro.")]
+        [SerializeField] private TMP_Text reportDetailsTextTMP;
+
+        [Tooltip("Texto legacy para la puntuación.")]
+        [SerializeField] private Text reportScoreTextLegacy;
+
+        [Tooltip("Texto legacy para los detalles del reporte.")]
+        [SerializeField] private Text reportDetailsTextLegacy;
 
         private void Awake()
         {
@@ -123,6 +140,57 @@ namespace Simu1.View
         }
 
         /// <summary>
+        /// Muestra el panel modal o textos detallados con el "Reporte de Tiro" y puntuación final.
+        /// </summary>
+        public void DisplayShotReport(
+            int score, 
+            float flightTime, 
+            Vector3 impactPoint, 
+            float relativeSpeed, 
+            float collisionImpulse, 
+            int fallenPieces, 
+            int totalPieces)
+        {
+            if (shotReportPanel != null)
+            {
+                shotReportPanel.SetActive(true);
+            }
+
+            string scoreFormatted = $"PUNTUACIÓN: {score:N0}";
+            SetText(reportScoreTextTMP, reportScoreTextLegacy, scoreFormatted);
+
+            string details = string.Format(
+                CultureInfo.InvariantCulture,
+                "Tiempo de vuelo: {0:F2} s\n" +
+                "Punto de impacto: ({1:F1}, {2:F1}, {3:F1})\n" +
+                "Velocidad relativa: {4:F1} m/s\n" +
+                "Impulso de choque: {5:F1} N·s\n" +
+                "Piezas derribadas: {6} / {7}",
+                flightTime,
+                impactPoint.x, impactPoint.y, impactPoint.z,
+                relativeSpeed,
+                collisionImpulse,
+                fallenPieces,
+                totalPieces
+            );
+
+            SetText(reportDetailsTextTMP, reportDetailsTextLegacy, details);
+
+            Debug.Log($"[Reporte de Tiro] {scoreFormatted} | {details.Replace("\n", " | ")}");
+        }
+
+        /// <summary>
+        /// Oculta el panel de reporte de tiro.
+        /// </summary>
+        public void HideShotReport()
+        {
+            if (shotReportPanel != null)
+            {
+                shotReportPanel.SetActive(false);
+            }
+        }
+
+        /// <summary>
         /// Helper privado para actualizar texto priorizando TextMeshPro sobre Text legacy.
         /// </summary>
         private static void SetText(TMP_Text tmpField, Text legacyField, string content)
@@ -148,6 +216,11 @@ namespace Simu1.View
         public void SetAngleTextLegacy(Text t) => angleTextLegacy = t;
         public void SetDistanceTextLegacy(Text t) => distanceResultTextLegacy = t;
         public void SetHeightTextLegacy(Text t) => heightResultTextLegacy = t;
+        public void SetShotReportPanel(GameObject panel) => shotReportPanel = panel;
+        public void SetReportScoreTextTMP(TMP_Text t) => reportScoreTextTMP = t;
+        public void SetReportDetailsTextTMP(TMP_Text t) => reportDetailsTextTMP = t;
+        public void SetReportScoreTextLegacy(Text t) => reportScoreTextLegacy = t;
+        public void SetReportDetailsTextLegacy(Text t) => reportDetailsTextLegacy = t;
 
         #endregion
     }

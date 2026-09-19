@@ -145,6 +145,21 @@ namespace Simu1.Pooling
             }
         }
 
+        /// <summary>
+        /// Recicla todos los proyectiles actualmente activos en la escena y los devuelve al pool.
+        /// </summary>
+        public void ReturnAllActive()
+        {
+            var activeProjectiles = FindObjectsByType<BallisticProjectile>(FindObjectsSortMode.None);
+            for (int i = 0; i < activeProjectiles.Length; i++)
+            {
+                if (activeProjectiles[i] != null && activeProjectiles[i].gameObject.activeSelf)
+                {
+                    Release(activeProjectiles[i]);
+                }
+            }
+        }
+
         private void OnDestroy()
         {
             pool?.Clear();

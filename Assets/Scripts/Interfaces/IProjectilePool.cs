@@ -10,5 +10,6 @@ namespace Simu1.Interfaces
     {
         BallisticProjectile Get();
         void Release(BallisticProjectile projectile);
+        void ReturnAllActive();
     }
 }

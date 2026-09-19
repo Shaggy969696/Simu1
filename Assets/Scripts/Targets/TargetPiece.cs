@@ -95,6 +95,14 @@ namespace Simu1.Targets
             SaveInitialState();
         }
 
+        private void OnValidate()
+        {
+            if (GetComponent<HingeJoint>() != null || GetComponent<SpringJoint>() != null)
+            {
+                isSuspendedTarget = true;
+            }
+        }
+
         /// <summary>
         /// Guarda la posición, rotación y parámetros de Joint iniciales.
         /// </summary>
@@ -173,7 +181,7 @@ namespace Simu1.Targets
 
             // Para dianas suspendidas (péndulos Hinge o dianas Spring), balancearse o estirarse es su comportamiento natural
             // Solo se consideran derribadas si su unión física se quiebra o caen al suelo
-            if (isSuspendedTarget) return false;
+            if (isSuspendedTarget || GetComponent<HingeJoint>() != null || GetComponent<SpringJoint>() != null) return false;
 
             // 2. Verificación por distancia respecto a la posición inicial
             Vector3 currentPos = initialParent != null ? initialParent.TransformPoint(initialLocalPosition) : initialLocalPosition;
@@ -258,14 +266,9 @@ namespace Simu1.Targets
             }
 
             isToppled = false;
-            Joint[] existingJoints = GetComponents<Joint>();
-            for (int i = 0; i < existingJoints.Length; i++)
-            {
-                if (existingJoints[i] != null)
-                {
-                    DestroyImmediate(existingJoints[i]);
-                }
-            }
+            // Los joints intactos se conservan para evitar pérdidas de referencias y errores en runtime o editor.
+            // Solo los joints que se hayan fracturado durante la simulación (GetComponent<Joint>() == null)
+            // se reconstruirán en PrepareForReset_RebuildJoint().
         }
 
         public void PrepareForReset_FreezeKinematic()
@@ -290,7 +293,8 @@ namespace Simu1.Targets
 
         public void PrepareForReset_RebuildJoint()
         {
-            if (hadJoint)
+            // Solo reconstruir si tenía un joint originalmente y se rompió por un impacto físico
+            if (hadJoint && GetComponent<Joint>() == null)
             {
                 RestoreJoint();
             }
@@ -310,6 +314,7 @@ namespace Simu1.Targets
         private void RestoreJoint()
         {
             if (!hadJoint || originalJointConfig.JointType == null) return;
+            if (GetComponent<Joint>() != null) return; // Si ya existe, no duplicar
 
             Joint newJoint = gameObject.AddComponent(originalJointConfig.JointType) as Joint;
             if (newJoint == null) return;

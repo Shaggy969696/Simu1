@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Globalization;
 using Simu1.Interfaces;
 using Simu1.Model;
@@ -44,6 +45,12 @@ namespace Simu1.Controller
         [Tooltip("Botón opcional para ejecutar el disparo.")]
         [SerializeField] private Button fireButton;
 
+        [Tooltip("Botón opcional para restablecer la escena y comenzar un nuevo intento.")]
+        [SerializeField] private Button resetButton;
+
+        [Tooltip("Botón opcional en el panel de controles para restablecer.")]
+        [SerializeField] private Button panelResetButton;
+
         [Header("Referencias de Disparo y Lanzamiento")]
         [Tooltip("Gestor de Object Pooling para proyectiles.")]
         [SerializeField] private ProjectilePool projectilePool;
@@ -59,6 +66,21 @@ namespace Simu1.Controller
 
         [Tooltip("Administrador de la estructura de objetivos físicos.")]
         [SerializeField] private TargetStructureManager targetStructureManager;
+
+        [Header("Ciclo de Disparo y Asentamiento Físico")]
+        [Tooltip("Tiempo mínimo en segundos para permitir que el impacto físico se propague antes de cerrar el reporte.")]
+        [SerializeField] private float minSettlementDelay = 1.2f;
+
+        [Tooltip("Tiempo máximo en segundos que se esperará a que los escombros dejen de moverse.")]
+        [SerializeField] private float maxSettlementTimeout = 3.5f;
+
+        [Header("Estado Actual (Solo Lectura)")]
+        [SerializeField] private bool isShootingInProgress;
+
+        private Coroutine settlementCoroutine;
+        private Coroutine shotTimeoutCoroutine;
+
+        public bool IsShootingInProgress => isShootingInProgress;
 
         [Header("Configuración Inicial del Modelo")]
         [Range(0f, 90f)]
@@ -189,6 +211,16 @@ namespace Simu1.Controller
             {
                 fireButton.onClick.AddListener(Fire);
             }
+
+            if (resetButton != null)
+            {
+                resetButton.onClick.AddListener(ResetAttempt);
+            }
+
+            if (panelResetButton != null)
+            {
+                panelResetButton.onClick.AddListener(ResetAttempt);
+            }
         }
 
         private void Update()
@@ -295,6 +327,11 @@ namespace Simu1.Controller
         public void Fire()
         {
             if (model == null) return;
+            if (isShootingInProgress) return;
+
+            isShootingInProgress = true;
+            if (shotTimeoutCoroutine != null) StopCoroutine(shotTimeoutCoroutine);
+            shotTimeoutCoroutine = StartCoroutine(ShotSafetyTimeout(12f));
 
             Vector3 fireDirection = spawnPoint != null 
                 ? spawnPoint.up 
@@ -349,35 +386,158 @@ namespace Simu1.Controller
             else
             {
                 Debug.LogWarning("[BallisticController] No se asignó ni ProjectilePool ni projectilePrefab.", this);
+                isShootingInProgress = false;
+            }
+        }
+
+        private IEnumerator ShotSafetyTimeout(float timeoutSeconds)
+        {
+            yield return new WaitForSeconds(timeoutSeconds);
+            if (isShootingInProgress)
+            {
+                Debug.Log("[BallisticController] Timeout de disparo alcanzado sin impacto.");
+                isShootingInProgress = false;
             }
         }
 
         /// <summary>
         /// Procesa el impacto notificado por el proyectil:
-        /// actualiza los datos en el Modelo y ordena a la Vista visualizarlos.
+        /// Inicia la espera de asentamiento físico para luego recopilar datos de la torre y reportar a la vista.
         /// </summary>
         public void HandleProjectileImpact(ProjectileImpactData impactData)
         {
+            if (shotTimeoutCoroutine != null)
+            {
+                StopCoroutine(shotTimeoutCoroutine);
+                shotTimeoutCoroutine = null;
+            }
+
+            if (settlementCoroutine != null)
+            {
+                StopCoroutine(settlementCoroutine);
+            }
+            settlementCoroutine = StartCoroutine(WaitForSettlementAndReport(impactData));
+        }
+
+        private IEnumerator WaitForSettlementAndReport(ProjectileImpactData impactData)
+        {
+            // 1. Espera mínima para que el impulso físico se transmita por los joints
+            if (minSettlementDelay > 0f)
+            {
+                yield return new WaitForSeconds(minSettlementDelay);
+            }
+
+            // 2. Esperar hasta que la estructura se asiente o se cumpla el timeout máximo
+            float elapsed = 0f;
+            float maxWait = Mathf.Max(0f, maxSettlementTimeout - minSettlementDelay);
+            while (elapsed < maxWait)
+            {
+                if (targetStructureManager == null || targetStructureManager.IsStructureSettled())
+                {
+                    break;
+                }
+                yield return new WaitForSeconds(0.2f);
+                elapsed += 0.2f;
+            }
+
+            // 3. Recopilar métricas de la estructura de objetivos
+            int fallenCount = targetStructureManager != null ? targetStructureManager.FallenPiecesCount : 0;
+            int totalCount = targetStructureManager != null ? targetStructureManager.TotalPiecesCount : 0;
+            int structureScore = targetStructureManager != null ? targetStructureManager.CurrentScore : 0;
+
+            // 4. Actualizar el Modelo
             if (model != null)
             {
                 model.SetImpactResults(
-                    impactData.HorizontalDistance, 
-                    impactData.MaxHeight,
-                    impactData.FlightTime,
-                    impactData.RelativeSpeed,
-                    impactData.ImpulseMagnitude
+                    horizontalDistance: impactData.HorizontalDistance,
+                    maxHeight: impactData.MaxHeight,
+                    flightTime: impactData.FlightTime,
+                    relativeVelocity: impactData.RelativeSpeed,
+                    collisionImpulse: impactData.ImpulseMagnitude,
+                    fallenPieces: fallenCount,
+                    structureScore: structureScore,
+                    impactPosition: impactData.ImpactPosition
                 );
+            }
+
+            // 5. Notificar a la Vista para presentar los resultados y el reporte
+            if (view != null)
+            {
+                view.DisplayImpactResults(impactData.HorizontalDistance, impactData.MaxHeight);
+
+                int totalScore = model != null ? model.LastScore : structureScore;
+                view.DisplayShotReport(
+                    score: totalScore,
+                    flightTime: impactData.FlightTime,
+                    impactPoint: impactData.ImpactPosition,
+                    relativeSpeed: impactData.RelativeSpeed,
+                    collisionImpulse: impactData.ImpulseMagnitude,
+                    fallenPieces: fallenCount,
+                    totalPieces: totalCount
+                );
+            }
+
+            isShootingInProgress = false;
+            settlementCoroutine = null;
+        }
+
+        /// <summary>
+        /// Restablece la simulación para un nuevo intento:
+        /// - Detiene corrutinas pendientes.
+        /// - Recicla todos los proyectiles activos al pool.
+        /// - Restablece la torre y joints físicos sin explosión.
+        /// - Limpia los datos de impacto del Modelo.
+        /// - Oculta el modal de reporte de la Vista.
+        /// </summary>
+        public void ResetAttempt()
+        {
+            if (shotTimeoutCoroutine != null)
+            {
+                StopCoroutine(shotTimeoutCoroutine);
+                shotTimeoutCoroutine = null;
+            }
+
+            if (settlementCoroutine != null)
+            {
+                StopCoroutine(settlementCoroutine);
+                settlementCoroutine = null;
+            }
+
+            isShootingInProgress = false;
+
+            if (projectilePool != null)
+            {
+                projectilePool.ReturnAllActive();
+            }
+
+            if (targetStructureManager != null)
+            {
+                targetStructureManager.ResetStructure();
+            }
+
+            if (model != null)
+            {
+                model.ResetImpact();
             }
 
             if (view != null)
             {
-                view.DisplayImpactResults(impactData.HorizontalDistance, impactData.MaxHeight);
+                view.ResetImpactDisplay();
+                view.HideShotReport();
             }
         }
 
         #endregion
 
-        #region Utilidades
+        #region Utilidades y Setters
+
+        public void SetResetButton(Button button) => resetButton = button;
+        public void SetPanelResetButton(Button button) => panelResetButton = button;
+        public void SetFireButton(Button button) => fireButton = button;
+        public void SetMinSettlementDelay(float delay) => minSettlementDelay = delay;
+        public void SetMaxSettlementTimeout(float timeout) => maxSettlementTimeout = timeout;
+        public void SetView(BallisticView newView) => view = newView;
+        public void SetProjectilePool(ProjectilePool pool) => projectilePool = pool;
 
         private static bool TryParseFloatFlexible(string text, out float result)
         {
@@ -421,6 +581,16 @@ namespace Simu1.Controller
             if (fireButton != null)
             {
                 fireButton.onClick.RemoveListener(Fire);
+            }
+
+            if (resetButton != null)
+            {
+                resetButton.onClick.RemoveListener(ResetAttempt);
+            }
+
+            if (panelResetButton != null)
+            {
+                panelResetButton.onClick.RemoveListener(ResetAttempt);
             }
         }
 
