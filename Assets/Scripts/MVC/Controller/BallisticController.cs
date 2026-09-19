@@ -69,10 +69,10 @@ namespace Simu1.Controller
 
         [Header("Ciclo de Disparo y Asentamiento Físico")]
         [Tooltip("Tiempo mínimo en segundos para permitir que el impacto físico se propague antes de cerrar el reporte.")]
-        [SerializeField] private float minSettlementDelay = 1.2f;
+        [SerializeField] private float minSettlementDelay = 0.8f;
 
         [Tooltip("Tiempo máximo en segundos que se esperará a que los escombros dejen de moverse.")]
-        [SerializeField] private float maxSettlementTimeout = 3.5f;
+        [SerializeField] private float maxSettlementTimeout = 2.5f;
 
         [Header("Estado Actual (Solo Lectura)")]
         [SerializeField] private bool isShootingInProgress;
@@ -410,6 +410,12 @@ namespace Simu1.Controller
             {
                 StopCoroutine(shotTimeoutCoroutine);
                 shotTimeoutCoroutine = null;
+            }
+
+            // Actualización visual inmediata de distancia y altura máxima en la tarjeta de control
+            if (view != null)
+            {
+                view.DisplayImpactResults(impactData.HorizontalDistance, impactData.MaxHeight);
             }
 
             if (settlementCoroutine != null)

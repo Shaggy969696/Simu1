@@ -94,6 +94,7 @@ namespace Simu1.Pooling
 
         private void OnReturnedToPool(BallisticProjectile projectile)
         {
+            projectile.ClearImpactListeners();
             projectile.ResetState();
             projectile.transform.localScale = Vector3.one;
             projectile.gameObject.SetActive(false);

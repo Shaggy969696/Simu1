@@ -82,6 +82,7 @@ namespace Simu1.Targets
         public bool IsToppled => isToppled;
         public int PointValue => pointValue;
         public bool HasSavedInitialState => hasSavedInitialState;
+        public bool IsSuspendedTarget => isSuspendedTarget;
 
         public event Action<TargetPiece> OnPieceToppled;
 

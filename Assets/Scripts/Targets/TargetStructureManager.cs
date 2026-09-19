@@ -123,7 +123,12 @@ namespace Simu1.Targets
 
             for (int i = 0; i < pieces.Length; i++)
             {
-                if (pieces[i] != null && pieces[i].TryGetComponent<Rigidbody>(out var rb))
+                if (pieces[i] == null) continue;
+
+                // Las dianas colgantes que oscilan libremente en su joint no bloquean el reporte de tiro
+                if (pieces[i].IsSuspendedTarget && !pieces[i].IsToppled) continue;
+
+                if (pieces[i].TryGetComponent<Rigidbody>(out var rb))
                 {
                     if (rb.linearVelocity.sqrMagnitude > speedThreshold * speedThreshold)
                     {

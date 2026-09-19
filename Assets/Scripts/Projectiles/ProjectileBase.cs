@@ -97,6 +97,13 @@ namespace Simu1.Projectiles
             launchTime = 0f;
             launchPosition = Vector3.zero;
             transform.localScale = Vector3.one;
+        }
+
+        /// <summary>
+        /// Limpia los suscriptores del evento de impacto al reciclarse hacia el pool.
+        /// </summary>
+        public void ClearImpactListeners()
+        {
             OnImpactDetected = null;
         }
 
