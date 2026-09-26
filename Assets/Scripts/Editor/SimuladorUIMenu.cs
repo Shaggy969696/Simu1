@@ -1,6 +1,8 @@
 using System.IO;
 using Simu1.Controller;
+using Simu1.Persistence;
 using Simu1.Pooling;
+using Simu1.Services;
 using Simu1.Targets;
 using Simu1.View;
 using UnityEditor;
@@ -104,7 +106,7 @@ namespace Simu1.Editor
             panelRect.anchorMax = new Vector2(0f, 0f);
             panelRect.pivot = new Vector2(0f, 0f);
             panelRect.anchoredPosition = new Vector2(25f, 25f);
-            panelRect.sizeDelta = new Vector2(360f, 540f);
+            panelRect.sizeDelta = new Vector2(360f, 590f);
 
             Image panelImage = panelGO.GetComponent<Image>();
             panelImage.color = new Color(0.10f, 0.13f, 0.18f, 0.94f);
@@ -202,12 +204,15 @@ namespace Simu1.Editor
             massInput.contentType = InputField.ContentType.DecimalNumber;
             massInput.text = "2.0";
 
-            // Botones de Disparo y Reinicio en el Panel
+            // Botones de Disparo, Reinicio e Historial UGS en el Panel
             GameObject fireBtnGO = CreateCustomButton(panelGO.transform, "Boton_Disparar", "DISPARAR [ESPACIO]", new Color(0.18f, 0.52f, 0.88f, 1f), 36f, uiResources);
             Button panelFireBtn = fireBtnGO.GetComponent<Button>();
 
             GameObject resetBtnGO = CreateCustomButton(panelGO.transform, "Boton_Restablecer", "RESTABLECER ESCENA", new Color(0.30f, 0.35f, 0.44f, 1f), 30f, uiResources);
             Button panelResetBtn = resetBtnGO.GetComponent<Button>();
+
+            GameObject historyBtnGO = CreateCustomButton(panelGO.transform, "Boton_HistorialUGS", "VER HISTORIAL UGS", new Color(0.14f, 0.45f, 0.58f, 1f), 30f, uiResources);
+            Button panelHistoryBtn = historyBtnGO.GetComponent<Button>();
 
             // Card / Panel de Resultados del Último Impacto
             GameObject resultsCard = DefaultControls.CreatePanel(uiResources);
@@ -317,10 +322,100 @@ namespace Simu1.Editor
             reportPanelGO.SetActive(false);
 
             // =========================================================================
+            // 5.2 MODAL DE HISTORIAL UGS CLOUD SAVE (Ventana Flotante Central)
+            // =========================================================================
+            GameObject cloudModalGO = DefaultControls.CreatePanel(uiResources);
+            cloudModalGO.name = "Modal_HistorialUGS";
+            cloudModalGO.transform.SetParent(canvasGO.transform, false);
+
+            RectTransform cloudRect = cloudModalGO.GetComponent<RectTransform>();
+            cloudRect.anchorMin = new Vector2(0.5f, 0.5f);
+            cloudRect.anchorMax = new Vector2(0.5f, 0.5f);
+            cloudRect.pivot = new Vector2(0.5f, 0.5f);
+            cloudRect.anchoredPosition = Vector2.zero;
+            cloudRect.sizeDelta = new Vector2(580f, 680f);
+
+            Image cloudImage = cloudModalGO.GetComponent<Image>();
+            cloudImage.color = new Color(0.06f, 0.08f, 0.13f, 0.98f);
+
+            VerticalLayoutGroup cloudLayout = cloudModalGO.AddComponent<VerticalLayoutGroup>();
+            cloudLayout.padding = new RectOffset(18, 18, 16, 16);
+            cloudLayout.spacing = 10f;
+            cloudLayout.childControlWidth = true;
+            cloudLayout.childControlHeight = false;
+            cloudLayout.childForceExpandWidth = true;
+            cloudLayout.childForceExpandHeight = false;
+
+            CreateLabel(cloudModalGO.transform, "HISTORIAL PERSISTIDO (UGS CLOUD SAVE)", 18, FontStyle.Bold, new Color(0.25f, 0.75f, 1f), TextAnchor.MiddleCenter);
+            CreateSeparator(cloudModalGO.transform);
+
+            GameObject cloudTitleGO = CreateLabel(cloudModalGO.transform, "HISTORIAL UGS: 0 ENSAYOS GUARDADOS", 15, FontStyle.Bold, new Color(0.4f, 0.85f, 0.95f), TextAnchor.MiddleCenter).gameObject;
+            cloudTitleGO.name = "Text_TituloHistorialUGS";
+            Text cloudTitleText = cloudTitleGO.GetComponent<Text>();
+
+            GameObject cloudScrollGO = DefaultControls.CreateScrollView(uiResources);
+            cloudScrollGO.name = "Scroll_HistorialUGS";
+            cloudScrollGO.transform.SetParent(cloudModalGO.transform, false);
+
+            LayoutElement cloudScrollLayout = cloudScrollGO.AddComponent<LayoutElement>();
+            cloudScrollLayout.minHeight = 440f;
+            cloudScrollLayout.preferredHeight = 480f;
+            cloudScrollLayout.flexibleHeight = 1f;
+
+            ScrollRect cloudScrollRect = cloudScrollGO.GetComponent<ScrollRect>();
+            cloudScrollRect.horizontal = false;
+            cloudScrollRect.vertical = true;
+
+            Transform cloudHScrollbar = cloudScrollGO.transform.Find("Scrollbar Horizontal");
+            if (cloudHScrollbar != null)
+            {
+                Object.DestroyImmediate(cloudHScrollbar.gameObject);
+            }
+
+            Transform cloudContent = cloudScrollGO.transform.Find("Viewport/Content");
+            if (cloudContent != null)
+            {
+                VerticalLayoutGroup cloudContentLayout = cloudContent.gameObject.AddComponent<VerticalLayoutGroup>();
+                cloudContentLayout.padding = new RectOffset(12, 12, 12, 12);
+                cloudContentLayout.spacing = 8f;
+                cloudContentLayout.childControlWidth = true;
+                cloudContentLayout.childControlHeight = true;
+                cloudContentLayout.childForceExpandWidth = true;
+                cloudContentLayout.childForceExpandHeight = false;
+
+                ContentSizeFitter cloudFitter = cloudContent.gameObject.AddComponent<ContentSizeFitter>();
+                cloudFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+                cloudFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            }
+
+            Text cloudDetailsText = CreateLabel(cloudContent != null ? cloudContent : cloudScrollGO.transform, "Sin registros cargados aún.", 15, FontStyle.Normal, new Color(0.94f, 0.96f, 1f));
+            cloudDetailsText.name = "Text_DetallesHistorialUGS";
+            cloudDetailsText.verticalOverflow = VerticalWrapMode.Overflow;
+            cloudDetailsText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            cloudDetailsText.lineSpacing = 1.35f;
+
+            GameObject cloudCloseBtnGO = CreateCustomButton(cloudModalGO.transform, "Boton_CerrarHistorialUGS", "CERRAR", new Color(0.28f, 0.32f, 0.40f, 1f), 38f, uiResources);
+            Button cloudCloseBtn = cloudCloseBtnGO.GetComponent<Button>();
+
+            // Modal oculto por defecto
+            cloudModalGO.SetActive(false);
+
+            // =========================================================================
             // 6. Configurar componentes MVC (BallisticView y BallisticController)
             // =========================================================================
             GameObject cannonGO = GameObject.Find("Cannon");
             GameObject targetGO = cannonGO != null ? cannonGO : canvasGO;
+
+            // Asegurar servicios UGS en Cannon
+            SimulationRepository ugsRepo = null;
+            if (cannonGO != null)
+            {
+                if (cannonGO.GetComponent<UgsInitializer>() == null)
+                {
+                    Undo.AddComponent<UgsInitializer>(cannonGO);
+                }
+                ugsRepo = cannonGO.GetComponent<UgsSimulationRepository>() ?? Undo.AddComponent<UgsSimulationRepository>(cannonGO);
+            }
 
             BallisticView ballisticView = targetGO.GetComponent<BallisticView>() ?? targetGO.AddComponent<BallisticView>();
             SerializedObject soView = new SerializedObject(ballisticView);
@@ -330,6 +425,11 @@ namespace Simu1.Editor
             soView.FindProperty("shotReportPanel").objectReferenceValue = reportPanelGO;
             soView.FindProperty("reportScoreTextLegacy").objectReferenceValue = reportScoreText;
             soView.FindProperty("reportDetailsTextLegacy").objectReferenceValue = reportDetailsText;
+            soView.FindProperty("cloudHistoryPanel").objectReferenceValue = cloudModalGO;
+            soView.FindProperty("cloudHistoryTitleLegacy").objectReferenceValue = cloudTitleText;
+            soView.FindProperty("cloudHistoryDetailsLegacy").objectReferenceValue = cloudDetailsText;
+            soView.FindProperty("closeCloudHistoryButton").objectReferenceValue = cloudCloseBtn;
+
             if (cannonGO != null)
             {
                 soView.FindProperty("barrelTransform").objectReferenceValue = cannonGO.transform;
@@ -344,6 +444,12 @@ namespace Simu1.Editor
             soCtrl.FindProperty("massInputField").objectReferenceValue = massInput;
             soCtrl.FindProperty("fireButton").objectReferenceValue = panelFireBtn;
             soCtrl.FindProperty("resetButton").objectReferenceValue = modalResetBtn;
+            soCtrl.FindProperty("cloudHistoryButton").objectReferenceValue = panelHistoryBtn;
+
+            if (ugsRepo != null)
+            {
+                soCtrl.FindProperty("repository").objectReferenceValue = ugsRepo;
+            }
 
             var panelResetProp = soCtrl.FindProperty("panelResetButton");
             if (panelResetProp != null)

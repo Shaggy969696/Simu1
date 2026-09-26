@@ -2,6 +2,7 @@ using System.Collections;
 using System.Globalization;
 using Simu1.Interfaces;
 using Simu1.Model;
+using Simu1.Persistence;
 using Simu1.Pooling;
 using Simu1.Projectiles;
 using Simu1.Targets;
@@ -53,6 +54,13 @@ namespace Simu1.Controller
 
         [Tooltip("Botón opcional para borrar completamente el historial acumulativo.")]
         [SerializeField] private Button clearHistoryButton;
+
+        [Header("Persistencia en la Nube (UGS Cloud Save)")]
+        [Tooltip("Repositorio para persistencia de ensayos balísticos en UGS Cloud Save.")]
+        [SerializeField] private SimulationRepository repository;
+
+        [Tooltip("Botón opcional para consultar el historial de ensayos guardados en la nube.")]
+        [SerializeField] private Button cloudHistoryButton;
 
         [Header("Referencias de Disparo y Lanzamiento")]
         [Tooltip("Gestor de Object Pooling para proyectiles.")]
@@ -149,6 +157,11 @@ namespace Simu1.Controller
             {
                 targetStructureManager = FindFirstObjectByType<TargetStructureManager>();
             }
+
+            if (repository == null)
+            {
+                repository = GetComponent<SimulationRepository>() ?? FindFirstObjectByType<SimulationRepository>();
+            }
         }
 
         public TargetStructureManager StructureManager => targetStructureManager;
@@ -228,6 +241,11 @@ namespace Simu1.Controller
             if (clearHistoryButton != null)
             {
                 clearHistoryButton.onClick.AddListener(ClearHistory);
+            }
+
+            if (cloudHistoryButton != null)
+            {
+                cloudHistoryButton.onClick.AddListener(OnClickShowSavedHistory);
             }
         }
 
@@ -475,6 +493,30 @@ namespace Simu1.Controller
                 );
             }
 
+            // 4.1 Persistir automáticamente el ensayo balístico en UGS Cloud Save
+            if (repository != null && model != null)
+            {
+                bool isHit = (fallenCount > 0) || 
+                             (impactData.HitObject != null && (impactData.HitObject.CompareTag("Target") || impactData.HitObject.GetComponent<TargetPiece>() != null));
+
+                var shotEntry = new SavedShotEntry(
+                    attemptIndex: model.TotalAttemptsCount,
+                    angle: model.LaunchAngle,
+                    force: model.Force,
+                    mass: model.ProjectileMass,
+                    distance: impactData.HorizontalDistance,
+                    isHit: isHit,
+                    fallenPieces: fallenCount,
+                    score: model.LastScore,
+                    flightTime: impactData.FlightTime,
+                    maxHeight: impactData.MaxHeight,
+                    relativeSpeed: impactData.RelativeSpeed,
+                    collisionImpulse: impactData.ImpulseMagnitude
+                );
+
+                _ = repository.SaveShotAsync(shotEntry);
+            }
+
             // 5. Notificar a la Vista para presentar el historial acumulativo de disparos
             if (view != null)
             {
@@ -561,6 +603,36 @@ namespace Simu1.Controller
             ResetAttempt();
         }
 
+        /// <summary>
+        /// Consulta de forma asíncrona el historial guardado en UGS Cloud Save y le ordena a la Vista presentarlo.
+        /// </summary>
+        public async void OnClickShowSavedHistory()
+        {
+            if (repository == null)
+            {
+                Debug.LogWarning("[BallisticController] No se ha asignado un SimulationRepository para consultar el historial en la nube.", this);
+                return;
+            }
+
+            if (view != null)
+            {
+                view.ShowCloudHistoryLoading();
+            }
+
+            try
+            {
+                var history = await repository.LoadHistoryAsync();
+                if (view != null)
+                {
+                    view.DisplayCloudHistory(history);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[BallisticController] Error al consultar historial guardado en UGS: {ex.Message}");
+            }
+        }
+
         #endregion
 
         #region Utilidades y Setters
@@ -568,6 +640,8 @@ namespace Simu1.Controller
         public void SetResetButton(Button button) => resetButton = button;
         public void SetPanelResetButton(Button button) => panelResetButton = button;
         public void SetClearHistoryButton(Button button) => clearHistoryButton = button;
+        public void SetCloudHistoryButton(Button button) => cloudHistoryButton = button;
+        public void SetRepository(SimulationRepository repo) => repository = repo;
         public void SetFireButton(Button button) => fireButton = button;
         public void SetMinSettlementDelay(float delay) => minSettlementDelay = delay;
         public void SetMaxSettlementTimeout(float timeout) => maxSettlementTimeout = timeout;
@@ -626,6 +700,16 @@ namespace Simu1.Controller
             if (panelResetButton != null)
             {
                 panelResetButton.onClick.RemoveListener(ResetAttempt);
+            }
+
+            if (clearHistoryButton != null)
+            {
+                clearHistoryButton.onClick.RemoveListener(ClearHistory);
+            }
+
+            if (cloudHistoryButton != null)
+            {
+                cloudHistoryButton.onClick.RemoveListener(OnClickShowSavedHistory);
             }
         }
 

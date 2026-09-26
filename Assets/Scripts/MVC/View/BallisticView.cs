@@ -72,11 +72,43 @@ namespace Simu1.View
         [Tooltip("Texto legacy para los detalles del reporte.")]
         [SerializeField] private Text reportDetailsTextLegacy;
 
+        [Header("Panel Historial Persistido (UGS Cloud Save)")]
+        [Tooltip("Contenedor GameObject de la ventana modal de Historial UGS.")]
+        [SerializeField] private GameObject cloudHistoryPanel;
+
+        [Tooltip("Texto TextMeshPro para el encabezado del Historial UGS.")]
+        [SerializeField] private TMP_Text cloudHistoryTitleTMP;
+
+        [Tooltip("Texto TextMeshPro con los registros recuperados de UGS.")]
+        [SerializeField] private TMP_Text cloudHistoryDetailsTMP;
+
+        [Tooltip("Texto legacy para el encabezado del Historial UGS.")]
+        [SerializeField] private Text cloudHistoryTitleLegacy;
+
+        [Tooltip("Texto legacy con los registros recuperados de UGS.")]
+        [SerializeField] private Text cloudHistoryDetailsLegacy;
+
+        [Tooltip("Botón para cerrar la ventana modal de Historial UGS.")]
+        [SerializeField] private Button closeCloudHistoryButton;
+
         private void Awake()
         {
             if (barrelTransform == null)
             {
                 barrelTransform = transform;
+            }
+
+            if (closeCloudHistoryButton != null)
+            {
+                closeCloudHistoryButton.onClick.AddListener(HideCloudHistory);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (closeCloudHistoryButton != null)
+            {
+                closeCloudHistoryButton.onClick.RemoveListener(HideCloudHistory);
             }
         }
 
@@ -252,6 +284,87 @@ namespace Simu1.View
         }
 
         /// <summary>
+        /// Muestra el estado de carga mientras se consultan los datos en UGS Cloud Save.
+        /// </summary>
+        public void ShowCloudHistoryLoading()
+        {
+            if (cloudHistoryPanel != null)
+            {
+                cloudHistoryPanel.SetActive(true);
+            }
+
+            SetText(cloudHistoryTitleTMP, cloudHistoryTitleLegacy, "CONSULTANDO UGS CLOUD SAVE...");
+            SetText(cloudHistoryDetailsTMP, cloudHistoryDetailsLegacy, "Descargando registros balísticos desde Unity Gaming Services...\nPor favor espera un momento.");
+        }
+
+        /// <summary>
+        /// Muestra la lista de ensayos recuperados desde UGS Cloud Save en el panel modal.
+        /// </summary>
+        public void DisplayCloudHistory(List<SavedShotEntry> entries)
+        {
+            if (cloudHistoryPanel != null)
+            {
+                cloudHistoryPanel.SetActive(true);
+            }
+
+            int count = entries != null ? entries.Count : 0;
+            string title = count == 1
+                ? "HISTORIAL UGS: 1 ENSAYO GUARDADO"
+                : $"HISTORIAL UGS: {count} ENSAYOS GUARDADOS";
+
+            SetText(cloudHistoryTitleTMP, cloudHistoryTitleLegacy, title);
+
+            if (entries == null || entries.Count == 0)
+            {
+                SetText(cloudHistoryDetailsTMP, cloudHistoryDetailsLegacy, "No se encontraron ensayos guardados en UGS Cloud Save.\nRealiza disparos en el simulador para persistir datos en la nube.");
+                return;
+            }
+
+            var sb = new StringBuilder();
+            // Mostrar del más reciente al más antiguo
+            for (int i = entries.Count - 1; i >= 0; i--)
+            {
+                var entry = entries[i];
+                string formattedDate = entry.timestamp;
+                if (System.DateTime.TryParse(entry.timestamp, out var dt))
+                {
+                    formattedDate = dt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss");
+                }
+
+                string hitStatus = entry.isHit ? "<color=#2ecc71>IMPACTO EXITOSO</color>" : "<color=#e74c3c>FALLO</color>";
+
+                sb.AppendLine($"<size=17><b>=== ENSAYO #{entry.attemptIndex} ===</b></size>");
+                sb.AppendLine($"  • <b>Fecha / Hora:</b> {formattedDate}");
+                sb.AppendLine($"  • <b>Configuración:</b> Ángulo: {entry.angle:F1}° | Fuerza: {entry.force:F0} N | Masa: {entry.mass:F1} kg");
+                sb.AppendLine($"  • <b>Resultado:</b> {hitStatus} | Distancia XZ: {entry.distance:F2} m");
+                sb.AppendLine($"  • <b>Estructura:</b> Piezas derribadas: {entry.fallenPieces} | Puntos: {entry.score:N0}");
+                if (entry.flightTime > 0.001f || entry.maxHeight > 0.001f)
+                {
+                    sb.AppendLine($"  • <b>Física:</b> Tiempo vuelo: {entry.flightTime:F2} s | Altura máx: {entry.maxHeight:F2} m");
+                }
+
+                if (i > 0)
+                {
+                    sb.AppendLine("\n────────────────────────────────────────\n");
+                }
+            }
+
+            SetText(cloudHistoryDetailsTMP, cloudHistoryDetailsLegacy, sb.ToString().TrimEnd());
+            Debug.Log($"[BallisticView] Historial UGS presentado ({count} registros).");
+        }
+
+        /// <summary>
+        /// Oculta el panel modal de historial UGS.
+        /// </summary>
+        public void HideCloudHistory()
+        {
+            if (cloudHistoryPanel != null)
+            {
+                cloudHistoryPanel.SetActive(false);
+            }
+        }
+
+        /// <summary>
         /// Helper privado para actualizar texto priorizando TextMeshPro sobre Text legacy.
         /// </summary>
         private static void SetText(TMP_Text tmpField, Text legacyField, string content)
@@ -282,6 +395,12 @@ namespace Simu1.View
         public void SetReportDetailsTextTMP(TMP_Text t) => reportDetailsTextTMP = t;
         public void SetReportScoreTextLegacy(Text t) => reportScoreTextLegacy = t;
         public void SetReportDetailsTextLegacy(Text t) => reportDetailsTextLegacy = t;
+        public void SetCloudHistoryPanel(GameObject panel) => cloudHistoryPanel = panel;
+        public void SetCloudHistoryTitleTMP(TMP_Text t) => cloudHistoryTitleTMP = t;
+        public void SetCloudHistoryDetailsTMP(TMP_Text t) => cloudHistoryDetailsTMP = t;
+        public void SetCloudHistoryTitleLegacy(Text t) => cloudHistoryTitleLegacy = t;
+        public void SetCloudHistoryDetailsLegacy(Text t) => cloudHistoryDetailsLegacy = t;
+        public void SetCloseCloudHistoryButton(Button btn) => closeCloudHistoryButton = btn;
 
         #endregion
     }
