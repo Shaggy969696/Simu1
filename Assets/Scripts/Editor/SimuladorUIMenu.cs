@@ -271,9 +271,12 @@ namespace Simu1.Editor
             scrollGO.name = "Scroll_Historial";
             scrollGO.transform.SetParent(reportPanelGO.transform, false);
 
+            RectTransform scrollRectTransform = scrollGO.GetComponent<RectTransform>();
+            scrollRectTransform.sizeDelta = new Vector2(494f, 440f);
+
             LayoutElement scrollLayout = scrollGO.AddComponent<LayoutElement>();
-            scrollLayout.minHeight = 420f;
-            scrollLayout.preferredHeight = 480f;
+            scrollLayout.minHeight = 400f;
+            scrollLayout.preferredHeight = 440f;
             scrollLayout.flexibleHeight = 1f;
 
             ScrollRect scrollRect = scrollGO.GetComponent<ScrollRect>();
@@ -357,9 +360,12 @@ namespace Simu1.Editor
             cloudScrollGO.name = "Scroll_HistorialUGS";
             cloudScrollGO.transform.SetParent(cloudModalGO.transform, false);
 
+            RectTransform cloudScrollRectTransform = cloudScrollGO.GetComponent<RectTransform>();
+            cloudScrollRectTransform.sizeDelta = new Vector2(544f, 520f);
+
             LayoutElement cloudScrollLayout = cloudScrollGO.AddComponent<LayoutElement>();
-            cloudScrollLayout.minHeight = 440f;
-            cloudScrollLayout.preferredHeight = 480f;
+            cloudScrollLayout.minHeight = 480f;
+            cloudScrollLayout.preferredHeight = 520f;
             cloudScrollLayout.flexibleHeight = 1f;
 
             ScrollRect cloudScrollRect = cloudScrollGO.GetComponent<ScrollRect>();
